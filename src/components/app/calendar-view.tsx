@@ -1,12 +1,12 @@
+
 'use client';
 
 import { useState } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, isSameDay, isWeekend, isToday, startOfWeek, endOfWeek, getMonth } from 'date-fns';
-import { ChevronLeft, ChevronRight, User, Star } from 'lucide-react';
-import Image from 'next/image';
+import { ChevronLeft, ChevronRight, User, Star, Bot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { cn } from '@/lib/utils';
+import { cn, getFriendInitial } from '@/lib/utils';
 import type { Arrangements, UserProfile } from '@/types';
 import { Badge } from '../ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
@@ -35,9 +35,7 @@ export function CalendarView({ arrangements, onSelectDate, nonWorkingDays = [], 
   const handlePrevMonth = () => setCurrentDate(subMonths(currentDate, 1));
   const handleNextMonth = () => setCurrentDate(addMonths(currentDate, 1));
 
-  const getFriendInitial = (name: string) => name ? name.charAt(0).toUpperCase() : <User className="h-4 w-4" />;
-  const findFriendByName = (name: string) => friends.find(f => f.displayName === name);
-
+  const findFriendById = (uid: string) => friends.find(f => f.uid === uid);
 
   return (
     <Card className="shadow-lg rounded-2xl">
@@ -74,7 +72,7 @@ export function CalendarView({ arrangements, onSelectDate, nonWorkingDays = [], 
                 className={cn(
                   'relative aspect-square border-r border-b p-2 text-left flex flex-col transition-colors duration-200',
                   isCurrentMonth ? 'bg-card' : 'bg-secondary/50',
-                  !isNonWorking && 'cursor-pointer hover:bg-secondary',
+                  'cursor-pointer hover:bg-secondary',
                   isToday(day) && 'bg-accent/10',
                   isNonWorking && 'bg-muted/30 text-muted-foreground/50'
                 )}
@@ -104,18 +102,18 @@ export function CalendarView({ arrangements, onSelectDate, nonWorkingDays = [], 
                 {arrangement && Object.keys(arrangement.seats).length > 0 ? (
                   <TooltipProvider>
                     <div className="mt-1 flex-1 flex flex-col justify-end items-start space-y-1">
-                      {Object.entries(arrangement.seats).map(([seat, friendName]) => {
-                        const friend = findFriendByName(friendName);
+                      {Object.entries(arrangement.seats).map(([seat, friendUid]) => {
+                        const friend = findFriendById(friendUid);
                         return (
                         <Tooltip key={seat}>
                           <TooltipTrigger asChild>
                              <Avatar className="h-6 w-6 border-2 border-white dark:border-card">
                                 <AvatarImage src={friend?.photoURL || undefined} alt={friend?.displayName} />
-                                <AvatarFallback>{getFriendInitial(friendName)}</AvatarFallback>
+                                <AvatarFallback>{getFriendInitial(friend?.displayName)}</AvatarFallback>
                              </Avatar>
                           </TooltipTrigger>
                           <TooltipContent>
-                            <p>{friendName} - {seat}</p>
+                            <p>{friend?.displayName || 'Unknown'} - {seat}</p>
                           </TooltipContent>
                         </Tooltip>
                       )})}
@@ -139,3 +137,5 @@ export function CalendarView({ arrangements, onSelectDate, nonWorkingDays = [], 
     </Card>
   );
 }
+
+    

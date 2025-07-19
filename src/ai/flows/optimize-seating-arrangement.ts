@@ -1,3 +1,4 @@
+
 // src/ai/flows/optimize-seating-arrangement.ts
 'use server';
 
@@ -11,14 +12,14 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import { format, addDays, isWeekend, parseISO, isValid } from 'date-fns';
+import { format, addDays, isWeekend, parseISO, isValid, isBefore, startOfToday } from 'date-fns';
 
 const OptimizeSeatingArrangementInputSchema = z.object({
   nonWorkingDays: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).describe('Array of dates in YYYY-MM-DD format representing non-working days (holidays).'),
   specialEvents: z.record(z.string()).describe('Object mapping dates (YYYY-MM-DD) to descriptions of special events.'),
   pastArrangements: z.array(z.object({
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe('Date of the seating arrangement (YYYY-MM-DD).'),
-    seats: z.array(z.string()).describe('Array of seat assignments for that date.'),
+    seats: z.array(z.string()).describe('Array of seat assignments for that date (friend display names).'),
   })).describe('History of past seating arrangements.'),
   friends: z.array(z.string()).describe('Array of friend names.'),
   seats: z.array(z.string()).describe('Array of available seat names.'),
@@ -43,7 +44,7 @@ const optimizeSeatingArrangementPrompt = ai.definePrompt({
   input: {schema: z.object({
       ...OptimizeSeatingArrangementInputSchema.shape,
       nextWorkingDay: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe('The determined next working day.'),
-      latestArrangement: z.array(z.string()).optional().describe('The most recent seating arrangement.'),
+      latestArrangement: z.array(z.string()).optional().describe('The most recent seating arrangement of friend names.'),
   })},
   output: {schema: OptimizeSeatingArrangementOutputSchema},
   prompt: `You are an AI assistant specialized in creating fair, rotating seating arrangements for a group of friends.
@@ -54,7 +55,7 @@ There are {{seats.length}} seats: {{{seats}}}.
 Your task is to determine the seating arrangement for the next working day, which is {{{nextWorkingDay}}}.
 
 Key factors to consider:
-- **Rotation and Fairness**: The primary goal is to rotate the friends through the seats fairly. The last known seating arrangement was: {{{latestArrangement}}}. The new arrangement should be the next logical rotation. For example, if the last arrangement was [Alice, Bob, Charlie], the next should be [Bob, Charlie, Alice]. The number of friends and seats is dynamic.
+- **Rotation and Fairness**: The primary goal is to rotate the friends through the seats fairly. If a last known seating arrangement is provided ({{{latestArrangement}}}), the new arrangement should be the next logical rotation. For example, if the last arrangement for seats [Seat 1, Seat 2, Seat 3] was [Alice, Bob, Charlie], the next should be [Bob, Charlie, Alice]. The number of friends and seats is dynamic. If no past arrangement is available, create a fair random assignment as the first one.
 - **Continuity**: The rotation should pick up from the most recent arrangement, ignoring any non-working days in between.
 - **Past History**: Use the full history of past arrangements to ensure long-term fairness. Past arrangements: {{{pastArrangements}}}.
 - **Special Events**: Check if the next working day has a special event: {{{specialEvents}}}. If an event description implies a seating preference, consider it. Otherwise, follow the standard rotation.
@@ -70,27 +71,27 @@ const optimizeSeatingArrangementFlow = ai.defineFlow(
   },
   async (input) => {
     // Determine the most recent arrangement date from pastArrangements
-    const sortedPastArrangements = [...input.pastArrangements].sort((a, b) => {
-        const dateA = parseISO(a.date);
-        const dateB = parseISO(b.date);
-        return dateB.getTime() - dateA.getTime();
-    });
+    const sortedPastArrangements = [...input.pastArrangements]
+      .filter(a => isValid(parseISO(a.date)))
+      .sort((a, b) => parseISO(b.date).getTime() - parseISO(a.date).getTime());
     
     const latestArrangement = sortedPastArrangements.length > 0 ? sortedPastArrangements[0] : null;
 
-    let currentDate = new Date();
-    if (latestArrangement && isValid(parseISO(latestArrangement.date))) {
-        currentDate = parseISO(latestArrangement.date);
-    } else if (sortedPastArrangements.length > 0) {
-        // Fallback for invalid date in latest arrangement
-        const lastValidArrangement = sortedPastArrangements.find(a => isValid(parseISO(a.date)));
-        if (lastValidArrangement) {
-            currentDate = parseISO(lastValidArrangement.date);
-        }
+    let baseDate: Date;
+    if (latestArrangement) {
+        baseDate = parseISO(latestArrangement.date);
+    } else {
+        // If no arrangements, start from yesterday to find today or the next working day.
+        baseDate = addDays(startOfToday(), -1);
     }
-
+    
     // Find the next working day
-    let nextDay = addDays(currentDate, 1);
+    let nextDay = addDays(baseDate, 1);
+    // Ensure we don't suggest a day in the past
+    if (isBefore(nextDay, startOfToday())) {
+      nextDay = startOfToday();
+    }
+    
     while (isWeekend(nextDay) || input.nonWorkingDays.includes(format(nextDay, 'yyyy-MM-dd'))) {
         nextDay = addDays(nextDay, 1);
     }
@@ -109,3 +110,5 @@ const optimizeSeatingArrangementFlow = ai.defineFlow(
     return output!;
   }
 );
+
+    

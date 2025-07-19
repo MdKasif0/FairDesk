@@ -1,10 +1,11 @@
+
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { format, subDays, isWeekend, parseISO, addDays, isValid, parse } from 'date-fns';
 import { Loader2, PlusCircle, Trash2, CalendarPlus, Users } from 'lucide-react';
-import { doc, getDoc, onSnapshot, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, writeBatch, Unsubscribe } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -54,9 +55,15 @@ export default function Home() {
       return;
     }
 
-    const unsubUser = onSnapshot(doc(db, 'users', user.uid), async (userDoc) => {
-      let groupUnsub = () => {};
+    let groupUnsub: Unsubscribe | null = null;
 
+    const unsubUser = onSnapshot(doc(db, 'users', user.uid), async (userDoc) => {
+      // Clean up previous group subscription before creating a new one
+      if (groupUnsub) {
+        groupUnsub();
+        groupUnsub = null;
+      }
+      
       if (userDoc.exists()) {
         const userData = userDoc.data() as UserProfile;
         if (!userData.groupId) {
@@ -82,13 +89,15 @@ export default function Home() {
         toast({ variant: 'destructive', title: 'User profile not found.' });
         router.push('/login');
       }
-
-      // Cleanup group listener when user listener is re-run or component unmounts
-      return () => groupUnsub(); 
     });
 
-    // Cleanup user listener on component unmount
-    return () => unsubUser();
+    // Cleanup listeners on component unmount
+    return () => {
+        unsubUser();
+        if (groupUnsub) {
+            groupUnsub();
+        }
+    };
     
   }, [user, loading, router, toast]);
 
@@ -124,7 +133,7 @@ export default function Home() {
 
   const isGroupReady = useMemo(() => {
     if (!group) return false;
-    return friends.length === group.seats.length;
+    return friends.length === group.seats.length && friends.length > 0;
   }, [group, friends]);
 
   const handleGenerate = async () => {
@@ -140,7 +149,11 @@ export default function Home() {
     try {
       const pastArrangementsForAI = Object.entries(arrangements).map(([date, arrangement]) => ({
         date,
-        seats: seats.map(seat => arrangement.seats[seat]),
+        seats: seats.map(seat => {
+            const friendId = arrangement.seats[seat];
+            const friend = friends.find(f => f.uid === friendId);
+            return friend ? friend.displayName : 'Unknown';
+        }),
       }));
 
       const result = await optimizeSeatingArrangement({
@@ -172,10 +185,12 @@ export default function Home() {
 
       const newArrangement: Arrangement = {
         seats: seats.reduce((acc, seat, index) => {
-          acc[seat] = result.arrangement[index];
+          const friendName = result.arrangement[index];
+          const friend = friends.find(f => f.displayName === friendName);
+          acc[seat] = friend ? friend.uid : 'unknown'; // Store UID
           return acc;
         }, {} as Record<string, string>),
-        comments: [{ user: 'AI Assistant', text: result.reasoning, timestamp: new Date().toISOString() }],
+        comments: [{ user: 'ai_assistant', text: result.reasoning, timestamp: new Date().toISOString() }],
         photos: [],
       };
 
@@ -206,12 +221,6 @@ export default function Home() {
     if (!group) return;
     const dateStr = format(date, 'yyyy-MM-dd');
     
-    // Optimistically update local state for better UX
-    setArrangements(prev => ({
-        ...prev,
-        [dateStr]: updatedArrangement,
-    }));
-
     const groupRef = doc(db, 'groups', group.id);
     try {
       const batch = writeBatch(db);
@@ -222,13 +231,6 @@ export default function Home() {
     } catch (error) {
       console.error("Error updating arrangement:", error);
       toast({ variant: 'destructive', title: 'Update failed', description: 'Could not save changes.' });
-       // Revert optimistic update on failure
-      // Note: A more robust solution might fetch the latest from DB.
-      onSnapshot(doc(db, 'groups', group.id), (groupDoc) => {
-        if (groupDoc.exists()) {
-          setArrangements(groupDoc.data().arrangements || {});
-        }
-      });
     }
   };
   
@@ -237,7 +239,7 @@ export default function Home() {
       const newDate = parse(newHolidayRef.current.value, 'yyyy-MM-dd', new Date());
       if (isValid(newDate)) {
         const dateStr = format(newDate, 'yyyy-MM-dd');
-        const updatedHolidays = [...(group.nonWorkingDays || []), dateStr];
+        const updatedHolidays = [...new Set([...(group.nonWorkingDays || []), dateStr])];
         
         const groupRef = doc(db, 'groups', group.id);
         const batch = writeBatch(db);
@@ -323,8 +325,8 @@ export default function Home() {
     try {
       const dateStr = format(selectedDate, 'yyyy-MM-dd');
       const newArrangement: Arrangement = {
-        seats: initialArrangement,
-        comments: [{ user: 'AI Assistant', text: 'Initial arrangement set by group creator.', timestamp: new Date().toISOString() }],
+        seats: initialArrangement, // Storing UIDs here
+        comments: [{ user: 'ai_assistant', text: 'Initial arrangement set by group creator.', timestamp: new Date().toISOString() }],
         photos: [],
       };
 
@@ -359,7 +361,10 @@ export default function Home() {
   
   const currentUserProfile = useMemo(() => friends.find(f => f.uid === user?.uid), [friends, user]);
   const isCreator = useMemo(() => user?.uid === group?.members[0], [user, group]);
-  const showInitialSetup = useMemo(() => isCreator && isGroupReady && Object.keys(arrangements).length === 0, [isCreator, isGroupReady, arrangements]);
+  const showInitialSetup = useMemo(() => {
+    if (!isCreator || !isGroupReady) return false;
+    return Object.keys(arrangements).length === 0;
+  }, [isCreator, isGroupReady, arrangements]);
 
 
   const sortedNonWorkingDays = useMemo(() => (group?.nonWorkingDays || []).sort((a,b) => a.localeCompare(b)), [group]);
@@ -396,7 +401,7 @@ export default function Home() {
                       <div key={seat}>
                         <Label>{seat}</Label>
                         <Select
-                          onValueChange={(friendDisplayName) => setInitialArrangement(p => ({...p, [seat]: friendDisplayName}))}
+                          onValueChange={(friendUid) => setInitialArrangement(p => ({...p, [seat]: friendUid}))}
                           value={initialArrangement[seat] || ''}
                         >
                           <SelectTrigger>
@@ -404,7 +409,7 @@ export default function Home() {
                           </SelectTrigger>
                           <SelectContent>
                             {friends.map(friend => (
-                              <SelectItem key={friend.uid} value={friend.displayName}>
+                              <SelectItem key={friend.uid} value={friend.uid}>
                                 {friend.displayName}
                               </SelectItem>
                             ))}
@@ -441,13 +446,13 @@ export default function Home() {
                   {isAiLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
                   {isAiLoading ? 'Optimizing...' : "Generate Next Arrangement"}
                 </Button>
-                {!isGroupReady && (
+                {!isGroupReady && group.seats.length > 0 && (
                   <p className="text-xs text-center mt-2 text-destructive">
-                    You need {group.seats.length} members in your group to generate seats. Your group has {friends.length}.
+                    Waiting for all friends to join. You need {group.seats.length} members, but have {friends.length}.
                   </p>
                 )}
                  {showInitialSetup && (
-                  <p className="text-xs text-center mt-2 text-destructive">
+                  <p className="text-xs text-center mt-2 text-primary">
                     You must set the initial arrangement before using the AI optimizer.
                   </p>
                 )}
@@ -525,9 +530,10 @@ export default function Home() {
           friends={friends}
           seats={seats}
           currentUser={currentUserProfile}
-          groupSize={friends.length}
         />
       )}
     </div>
   );
 }
+
+    

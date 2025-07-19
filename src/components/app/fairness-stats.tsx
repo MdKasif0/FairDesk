@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useMemo } from 'react';
@@ -16,29 +17,49 @@ interface FairnessStatsProps {
 }
 
 export function FairnessStats({ arrangements, friends, seats }: FairnessStatsProps) {
-  const friendNames = useMemo(() => friends.map(f => f.displayName), [friends]);
 
   const stats = useMemo(() => {
     const initialStats: Record<string, Record<string, number>> = {};
-    friendNames.forEach(friend => {
-      initialStats[friend] = {};
+    friends.forEach(friend => {
+      initialStats[friend.uid] = {};
       seats.forEach(seat => {
-        initialStats[friend][seat] = 0;
+        initialStats[friend.uid][seat] = 0;
       });
     });
 
     Object.values(arrangements).forEach(arrangement => {
-      Object.entries(arrangement.seats).forEach(([seat, friend]) => {
-        if (initialStats[friend] && initialStats[friend][seat] !== undefined) {
-          initialStats[friend][seat]++;
+      Object.entries(arrangement.seats).forEach(([seat, friendUid]) => {
+        if (initialStats[friendUid] && initialStats[friendUid][seat] !== undefined) {
+          initialStats[friendUid][seat]++;
         }
       });
     });
 
     return initialStats;
-  }, [arrangements, friendNames, seats]);
+  }, [arrangements, friends, seats]);
 
   const totalAssignments = useMemo(() => Object.values(arrangements).length, [arrangements]);
+
+  if (friends.length === 0 || seats.length === 0) {
+    return (
+        <Card>
+            <CardHeader>
+                <div className="flex items-center gap-3">
+                <div className="bg-primary/10 text-primary p-3 rounded-lg">
+                    <TrendingUp className="h-6 w-6" />
+                </div>
+                <div>
+                    <CardTitle>Fairness Statistics</CardTitle>
+                    <CardDescription>How often each person has had each seat.</CardDescription>
+                </div>
+                </div>
+            </CardHeader>
+            <CardContent>
+                <p className="text-sm text-muted-foreground text-center">Not enough data to show stats.</p>
+            </CardContent>
+        </Card>
+    )
+  }
 
   return (
     <Card>
@@ -76,7 +97,7 @@ export function FairnessStats({ arrangements, friends, seats }: FairnessStatsPro
                   </TableCell>
                   {seats.map(seat => (
                     <TableCell key={seat} className="text-right">
-                      <Badge variant="secondary" className="text-sm font-mono">{stats[friend.displayName]?.[seat] || 0}</Badge>
+                      <Badge variant="secondary" className="text-sm font-mono">{stats[friend.uid]?.[seat] || 0}</Badge>
                     </TableCell>
                   ))}
                 </TableRow>
@@ -95,3 +116,5 @@ export function FairnessStats({ arrangements, friends, seats }: FairnessStatsPro
     </Card>
   );
 }
+
+    
