@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { format, subDays, isWeekend, parseISO, addDays, isValid, parse } from 'date-fns';
-import { Loader2, PlusCircle, Trash2 } from 'lucide-react';
+import { Loader2, PlusCircle, Trash2, CalendarPlus } from 'lucide-react';
 import { doc, getDoc, onSnapshot, writeBatch } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
@@ -20,6 +20,7 @@ import { FairnessStats } from '@/components/app/fairness-stats';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import type { Arrangements, Arrangement, Group, UserProfile, Comment, Photo, OverrideRequest } from '@/types';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function Home() {
   const { toast } = useToast();
@@ -35,6 +36,11 @@ export default function Home() {
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [isDataLoading, setIsDataLoading] = useState(true);
+  
+  const [initialArrangement, setInitialArrangement] = useState<Record<string, string>>({});
+  const [initialArrangementDate, setInitialArrangementDate] = useState('');
+  const [isSettingInitial, setIsSettingInitial] = useState(false);
+
 
   const newHolidayRef = useRef<HTMLInputElement>(null);
   const newEventDateRef = useRef<HTMLInputElement>(null);
@@ -285,6 +291,60 @@ export default function Home() {
     toast({title: "Event removed"});
   }
 
+  const handleSetInitialArrangement = async () => {
+    if (!group) return;
+    // Validation
+    if (!initialArrangementDate) {
+      toast({ variant: 'destructive', title: 'Please select a date.' });
+      return;
+    }
+    const selectedDate = parse(initialArrangementDate, 'yyyy-MM-dd', new Date());
+    if (!isValid(selectedDate)) {
+      toast({ variant: 'destructive', title: 'Invalid date format.' });
+      return;
+    }
+    if (Object.keys(initialArrangement).length !== 3) {
+      toast({ variant: 'destructive', title: 'Please assign all three seats.' });
+      return;
+    }
+    const assignedFriends = Object.values(initialArrangement);
+    if (new Set(assignedFriends).size !== 3) {
+      toast({ variant: 'destructive', title: 'Each friend must be assigned to a unique seat.' });
+      return;
+    }
+
+    setIsSettingInitial(true);
+    try {
+      const dateStr = format(selectedDate, 'yyyy-MM-dd');
+      const newArrangement: Arrangement = {
+        seats: initialArrangement,
+        comments: [{ user: 'AI Assistant', text: 'Initial arrangement set by group creator.', timestamp: new Date().toISOString() }],
+        photos: [],
+      };
+
+      const groupRef = doc(db, 'groups', group.id);
+      const batch = writeBatch(db);
+      batch.update(groupRef, {
+        [`arrangements.${dateStr}`]: newArrangement
+      });
+      await batch.commit();
+
+      toast({
+        title: 'Initial Arrangement Set!',
+        description: `The first seating arrangement for ${format(selectedDate, 'MMMM do')} is ready.`,
+      });
+      // Reset form
+      setInitialArrangement({});
+      setInitialArrangementDate('');
+
+    } catch (error) {
+       console.error("Error setting initial arrangement:", error);
+       toast({ variant: 'destructive', title: 'Error', description: 'Could not save the initial arrangement.' });
+    } finally {
+      setIsSettingInitial(false);
+    }
+  };
+
   const selectedArrangement = useMemo(() => {
     if (!selectedDate) return null;
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
@@ -292,6 +352,9 @@ export default function Home() {
   }, [selectedDate, arrangements]);
   
   const currentUserProfile = useMemo(() => friends.find(f => f.uid === user?.uid), [friends, user]);
+  const isCreator = useMemo(() => user?.uid === group?.members[0], [user, group]);
+  const showInitialSetup = useMemo(() => isCreator && friends.length === 3 && Object.keys(arrangements).length === 0, [isCreator, friends, arrangements]);
+
 
   const sortedNonWorkingDays = useMemo(() => (group?.nonWorkingDays || []).sort((a,b) => a.localeCompare(b)), [group]);
   const sortedSpecialEvents = useMemo(() => Object.entries(group?.specialEvents || {}).sort(([a], [b]) => a.localeCompare(b)), [group]);
@@ -311,13 +374,53 @@ export default function Home() {
       <main className="flex-1 container mx-auto p-4 sm:p-6 lg:p-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
           <div className="lg:col-span-2">
-            <CalendarView
-              arrangements={arrangements}
-              onSelectDate={handleSelectDate}
-              nonWorkingDays={(group.nonWorkingDays || []).map(d => parseISO(d))}
-              specialEvents={group.specialEvents || {}}
-              friends={friends}
-            />
+             {showInitialSetup ? (
+              <Card className="mb-8 bg-primary/5 border-primary/20">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-3"><CalendarPlus /> Set Initial Arrangement</CardTitle>
+                  <CardDescription>Your group is full! Set the first seating arrangement to get started.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label htmlFor="initial-date">Start Date</Label>
+                    <Input id="initial-date" type="date" value={initialArrangementDate} onChange={e => setInitialArrangementDate(e.target.value)} />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {seats.map(seat => (
+                      <div key={seat}>
+                        <Label>{seat}</Label>
+                        <Select
+                          onValueChange={(friend) => setInitialArrangement(p => ({...p, [seat]: friend}))}
+                          value={initialArrangement[seat] || ''}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select friend" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {friends.map(friend => (
+                              <SelectItem key={friend.uid} value={friend.displayName}>
+                                {friend.displayName}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ))}
+                  </div>
+                  <Button onClick={handleSetInitialArrangement} disabled={isSettingInitial} className="w-full">
+                    {isSettingInitial ? <Loader2 className="animate-spin" /> : 'Save Initial Arrangement'}
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+               <CalendarView
+                arrangements={arrangements}
+                onSelectDate={handleSelectDate}
+                nonWorkingDays={(group.nonWorkingDays || []).map(d => parseISO(d))}
+                specialEvents={group.specialEvents || {}}
+                friends={friends}
+              />
+            )}
           </div>
           <div className="space-y-8">
             <Card>
@@ -328,13 +431,18 @@ export default function Home() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button onClick={handleGenerate} disabled={isAiLoading || friends.length < 3} className="w-full text-lg py-6 rounded-xl">
+                <Button onClick={handleGenerate} disabled={isAiLoading || friends.length < 3 || showInitialSetup} className="w-full text-lg py-6 rounded-xl">
                   {isAiLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
                   {isAiLoading ? 'Optimizing...' : "Generate Next Arrangement"}
                 </Button>
                 {friends.length < 3 && (
                   <p className="text-xs text-center mt-2 text-destructive">
                     You need 3 members in your group to generate seats. Your group has {friends.length}.
+                  </p>
+                )}
+                 {showInitialSetup && (
+                  <p className="text-xs text-center mt-2 text-destructive">
+                    You must set the initial arrangement before using the AI optimizer.
                   </p>
                 )}
               </CardContent>
