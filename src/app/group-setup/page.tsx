@@ -12,7 +12,6 @@ import {
   getDocs,
   writeBatch,
   doc,
-  addDoc,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Armchair, Loader2, LogOut, Users, UserPlus, Trash2, PlusCircle } from 'lucide-react';
@@ -79,8 +78,11 @@ export default function GroupSetupPage() {
       const newInviteCode = generateInviteCode();
       const batch = writeBatch(db);
 
-      // 1. Create the new group document
-      const groupRef = await addDoc(collection(db, 'groups'), {
+      // 1. Create a new group document reference (don't write it yet)
+      const newGroupRef = doc(collection(db, 'groups'));
+      
+      // 2. Set the data for the new group in the batch
+      batch.set(newGroupRef, {
         name: groupName,
         inviteCode: newInviteCode,
         members: [user.uid],
@@ -90,17 +92,18 @@ export default function GroupSetupPage() {
         specialEvents: {}
       });
 
-      // 2. Update the user's document with the new group ID
+      // 3. Update the user's document with the new group ID in the same batch
       const userRef = doc(db, 'users', user.uid);
-      batch.update(userRef, { groupId: groupRef.id });
+      batch.update(userRef, { groupId: newGroupRef.id });
 
+      // 4. Commit the atomic batch
       await batch.commit();
 
       toast({ title: 'Group created!', description: 'Your dashboard is ready.' });
       router.push('/');
     } catch (error) {
       console.error('Error creating group:', error);
-      toast({ variant: 'destructive', title: 'Could not create group.' });
+      toast({ variant: 'destructive', title: 'Could not create group.', description: 'Please check your Firestore rules.' });
     } finally {
       setIsCreating(false);
     }
