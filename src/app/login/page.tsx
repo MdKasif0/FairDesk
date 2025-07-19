@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Armchair, LogIn, Mail } from 'lucide-react';
+import { Armchair, LogIn } from 'lucide-react';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 
 import { Button } from '@/components/ui/button';
@@ -51,9 +51,9 @@ export default function LoginPage() {
 
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-secondary p-4">
+    <div className="flex min-h-screen items-center justify-center bg-secondary p-4 md:p-6">
       <div className="w-full max-w-md mx-auto">
-        <div className="flex items-center justify-center gap-4 mb-6">
+        <div className="flex flex-col items-center justify-center gap-4 mb-6 text-center">
             <div className="bg-primary text-primary-foreground p-4 rounded-2xl shadow-lg">
                 <Armchair className="h-10 w-10" />
             </div>
@@ -80,7 +80,6 @@ export default function LoginPage() {
                         placeholder="you@example.com"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        className="bg-input"
                         disabled={isLoading}
                     />
                 </div>
@@ -92,7 +91,6 @@ export default function LoginPage() {
                         placeholder="••••••••"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
-                        className="bg-input"
                         disabled={isLoading}
                     />
                 </div>

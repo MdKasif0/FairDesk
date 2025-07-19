@@ -110,10 +110,10 @@ export default function Home() {
   const getFriendById = (uid: string) => friends.find(f => f.uid === uid);
 
   return (
-    <main className="p-4 space-y-6">
+    <main className="p-4 md:p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">{format(currentDate, 'eeee, MMMM d, yyyy')}</h1>
-        <h2 className="text-lg font-semibold text-muted-foreground mt-2">Today's Seating</h2>
+        <h1 className="text-2xl md:text-3xl font-bold text-foreground">{format(currentDate, 'eeee, MMMM d, yyyy')}</h1>
+        <h2 className="text-lg md:text-xl font-semibold text-muted-foreground mt-2">Today's Seating</h2>
       </div>
 
       <TodaySeating arrangement={todayArrangement} getFriendById={getFriendById} seats={group?.seats || []} />
@@ -121,7 +121,7 @@ export default function Home() {
       <Card className="shadow-md rounded-2xl">
         <CardContent className="p-4">
           <div className="flex justify-between items-center mb-2">
-            <h3 className="font-semibold">Calendar Preview</h3>
+            <h3 className="font-semibold text-base">Calendar Preview</h3>
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -149,7 +149,7 @@ export default function Home() {
               month: "w-full",
               table: 'w-full',
               head_row: 'flex justify-between',
-              head_cell: 'w-auto text-muted-foreground uppercase text-xs',
+              head_cell: 'w-auto text-muted-foreground uppercase text-xs font-medium',
               row: 'flex w-full mt-2 justify-between',
               cell: 'h-9 w-9 text-center text-sm p-0 relative',
               day: 'h-9 w-9 p-0 font-normal rounded-full',
@@ -161,7 +161,7 @@ export default function Home() {
             <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500"></span>Notes</div>
             <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-yellow-500"></span>Present</div>
             <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500"></span>Overrides</div>
-            <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-gray-300"></span>Locked days</div>
+            <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-gray-300"></span>Locked</div>
           </div>
         </CardContent>
       </Card>
@@ -170,7 +170,7 @@ export default function Home() {
 
        <Card className="shadow-md rounded-2xl">
         <CardContent className="p-4 flex items-center justify-between">
-          <h3 className="font-semibold">View Fairness Stats</h3>
+          <h3 className="font-semibold text-base">View Fairness Stats</h3>
           <Button variant="ghost" size="icon">
             <ChevronRight />
           </Button>

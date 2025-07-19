@@ -14,7 +14,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
 
 export default function GroupSetupPage() {
   const { user, loading } = useAuth();
@@ -152,9 +151,9 @@ export default function GroupSetupPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-secondary p-4">
+    <div className="flex min-h-screen items-center justify-center bg-secondary p-4 md:p-6">
       <div className="w-full max-w-lg mx-auto">
-        <div className="flex items-center justify-center gap-4 mb-6">
+        <div className="flex flex-col items-center justify-center gap-4 mb-6 text-center">
           <div className="bg-primary text-primary-foreground p-4 rounded-2xl shadow-lg">
             <Armchair className="h-10 w-10" />
           </div>
@@ -165,7 +164,7 @@ export default function GroupSetupPage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card className="shadow-xl">
+          <Card className="shadow-xl md:col-span-2">
             <CardHeader>
               <CardTitle>Create a Group</CardTitle>
               <CardDescription>
@@ -202,7 +201,7 @@ export default function GroupSetupPage() {
             </CardContent>
           </Card>
 
-          <div className="space-y-6">
+          <div className="space-y-6 md:col-span-2">
             <Card className="shadow-xl">
               <CardHeader>
                 <CardTitle>Join a Group</CardTitle>
