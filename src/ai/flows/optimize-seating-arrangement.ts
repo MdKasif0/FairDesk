@@ -11,7 +11,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import { format, addDays, isWeekend, parseISO } from 'date-fns';
+import { format, addDays, isWeekend, parseISO, isValid } from 'date-fns';
 
 const OptimizeSeatingArrangementInputSchema = z.object({
   nonWorkingDays: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).describe('Array of dates in YYYY-MM-DD format representing non-working days (holidays).'),
@@ -66,10 +66,25 @@ const optimizeSeatingArrangementFlow = ai.defineFlow(
   },
   async (input) => {
     // Determine the most recent arrangement date from pastArrangements
-    const sortedPastArrangements = [...input.pastArrangements].sort((a, b) => b.date.localeCompare(a.date));
+    const sortedPastArrangements = [...input.pastArrangements].sort((a, b) => {
+        const dateA = parseISO(a.date);
+        const dateB = parseISO(b.date);
+        return dateB.getTime() - dateA.getTime();
+    });
+    
     const latestArrangement = sortedPastArrangements.length > 0 ? sortedPastArrangements[0] : null;
 
-    let currentDate = latestArrangement ? parseISO(latestArrangement.date) : new Date();
+    let currentDate = new Date();
+    if (latestArrangement && isValid(parseISO(latestArrangement.date))) {
+        currentDate = parseISO(latestArrangement.date);
+    } else if (sortedPastArrangements.length > 0) {
+        // Fallback for invalid date in latest arrangement
+        const lastValidArrangement = sortedPastArrangements.find(a => isValid(parseISO(a.date)));
+        if (lastValidArrangement) {
+            currentDate = parseISO(lastValidArrangement.date);
+        }
+    }
+
 
     // Find the next working day
     let nextDay = addDays(currentDate, 1);

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, isSameDay, isWeekend, isToday, startOfWeek, endOfWeek, getMonth } from 'date-fns';
-import { ChevronLeft, ChevronRight, User, Lock } from 'lucide-react';
+import { ChevronLeft, ChevronRight, User, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
@@ -16,9 +16,10 @@ interface CalendarViewProps {
   arrangements: Arrangements;
   onSelectDate: (date: Date) => void;
   nonWorkingDays?: Date[];
+  specialEvents?: Record<string, string>;
 }
 
-export function CalendarView({ arrangements, onSelectDate, nonWorkingDays = [] }: CalendarViewProps) {
+export function CalendarView({ arrangements, onSelectDate, nonWorkingDays = [], specialEvents = {} }: CalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const firstDayOfMonth = startOfMonth(currentDate);
@@ -69,7 +70,7 @@ export function CalendarView({ arrangements, onSelectDate, nonWorkingDays = [] }
             const arrangement = arrangements[dateStr];
             const isCurrentMonth = getMonth(day) === getMonth(currentDate);
             const isNonWorking = nonWorkingDays.some(d => isSameDay(d, day)) || isWeekend(day);
-            const isLocked = false; // Placeholder for future feature
+            const isSpecialEvent = !!specialEvents[dateStr];
 
             return (
               <div
@@ -83,13 +84,26 @@ export function CalendarView({ arrangements, onSelectDate, nonWorkingDays = [] }
                 )}
                 onClick={() => !isNonWorking && onSelectDate(day)}
               >
-                <div className={cn(
-                  "font-semibold text-sm",
-                  isToday(day) ? "text-primary font-bold" : isCurrentMonth ? "text-foreground" : "text-muted-foreground",
-                )}>
-                  {format(day, 'd')}
+                <div className="flex justify-between items-center">
+                  <div className={cn(
+                    "font-semibold text-sm",
+                    isToday(day) ? "text-primary font-bold" : isCurrentMonth ? "text-foreground" : "text-muted-foreground",
+                  )}>
+                    {format(day, 'd')}
+                  </div>
+                   {isSpecialEvent && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger>
+                           <Star className="h-4 w-4 text-yellow-500" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>{specialEvents[dateStr]}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                   )}
                 </div>
-                {isLocked && <Lock className="h-3 w-3 text-muted-foreground absolute top-2 right-2"/>}
 
                 {arrangement ? (
                   <TooltipProvider>
@@ -116,9 +130,6 @@ export function CalendarView({ arrangements, onSelectDate, nonWorkingDays = [] }
                         <Badge variant="outline" className="text-xs font-normal">Unassigned</Badge>
                      </div>
                   )
-                )}
-                {isNonWorking && !nonWorkingDays.some(d => isSameDay(d, day)) && (
-                    <div className="absolute inset-0 bg-muted/30"></div>
                 )}
                  {nonWorkingDays.some(d => isSameDay(d, day)) && (
                     <div className="absolute inset-0 bg-destructive/10"></div>

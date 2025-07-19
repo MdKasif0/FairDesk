@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { format, subDays, isWeekend, parseISO, addDays, isValid } from 'date-fns';
+import { format, subDays, isWeekend, parseISO, addDays, isValid, parse } from 'date-fns';
 import { Loader2, PlusCircle, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,7 @@ import { DayDetails } from '@/components/app/day-details';
 import { FairnessStats } from '@/components/app/fairness-stats';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import type { Arrangements, Arrangement } from '@/types';
+import { Label } from '@/components/ui/label';
 
 export default function Home() {
   const { toast } = useToast();
@@ -86,6 +87,17 @@ export default function Home() {
         });
         return;
       }
+      
+      const nextWorkingDayDate = parseISO(result.nextWorkingDay);
+      if (!isValid(nextWorkingDayDate)) {
+         toast({
+          variant: 'destructive',
+          title: 'Invalid Date Received',
+          description: 'The AI returned an invalid date for the next arrangement.',
+        });
+        return;
+      }
+
 
       setArrangements(prev => ({
         ...prev,
@@ -102,7 +114,7 @@ export default function Home() {
 
       toast({
         title: "Arrangement Optimized!",
-        description: `A new seating arrangement has been generated for ${format(parseISO(result.nextWorkingDay), 'MMMM do')}.`,
+        description: `A new seating arrangement has been generated for ${format(nextWorkingDayDate, 'MMMM do')}.`,
       });
     } catch (error) {
       console.error("AI optimization failed:", error);
@@ -125,31 +137,38 @@ export default function Home() {
   };
   
   const handleAddHoliday = () => {
-    if (newHolidayRef.current) {
-      const newDate = parseISO(newHolidayRef.current.value);
+    if (newHolidayRef.current?.value) {
+      const newDate = parse(newHolidayRef.current.value, 'yyyy-MM-dd', new Date());
       if (isValid(newDate)) {
         const dateStr = format(newDate, 'yyyy-MM-dd');
         if (!nonWorkingDays.includes(dateStr)) {
           setNonWorkingDays([...nonWorkingDays, dateStr]);
           newHolidayRef.current.value = '';
+          toast({title: "Holiday added", description: `${format(newDate, 'MMMM do, yyyy')} is now a non-working day.`});
         }
+      } else {
+        toast({variant: 'destructive', title: "Invalid Date", description: "Please enter a valid date for the holiday."});
       }
     }
   };
 
   const handleRemoveHoliday = (dateToRemove: string) => {
     setNonWorkingDays(nonWorkingDays.filter(d => d !== dateToRemove));
+    toast({title: "Holiday removed"});
   };
   
   const handleAddEvent = () => {
-    if (newEventDateRef.current && newEventDescRef.current) {
-      const newDate = parseISO(newEventDateRef.current.value);
+    if (newEventDateRef.current?.value && newEventDescRef.current?.value) {
+      const newDate = parse(newEventDateRef.current.value, 'yyyy-MM-dd', new Date());
       const newDesc = newEventDescRef.current.value;
       if (isValid(newDate) && newDesc.trim() !== '') {
         const dateStr = format(newDate, 'yyyy-MM-dd');
         setSpecialEvents({...specialEvents, [dateStr]: newDesc });
         newEventDateRef.current.value = '';
         newEventDescRef.current.value = '';
+        toast({title: "Event added", description: `Added "${newDesc}" on ${format(newDate, 'MMMM do, yyyy')}.`});
+      } else {
+        toast({variant: 'destructive', title: "Invalid Event", description: "Please enter a valid date and description."});
       }
     }
   }
@@ -158,6 +177,7 @@ export default function Home() {
     const newEvents = {...specialEvents};
     delete newEvents[dateToRemove];
     setSpecialEvents(newEvents);
+    toast({title: "Event removed"});
   }
 
   const selectedArrangement = useMemo(() => {
@@ -166,7 +186,7 @@ export default function Home() {
     return arrangements[dateStr] || { seats: {}, comments: [], photos: [] };
   }, [selectedDate, arrangements]);
 
-  const sortedNonWorkingDays = useMemo(() => nonWorkingDays.sort(), [nonWorkingDays]);
+  const sortedNonWorkingDays = useMemo(() => nonWorkingDays.sort((a,b) => a.localeCompare(b)), [nonWorkingDays]);
   const sortedSpecialEvents = useMemo(() => Object.entries(specialEvents).sort(([a], [b]) => a.localeCompare(b)), [specialEvents]);
 
   return (
@@ -179,6 +199,7 @@ export default function Home() {
               arrangements={arrangements}
               onSelectDate={handleSelectDate}
               nonWorkingDays={nonWorkingDays.map(d => parseISO(d))}
+              specialEvents={specialEvents}
             />
           </div>
           <div className="space-y-8">
@@ -201,10 +222,14 @@ export default function Home() {
               <Card>
                 <CardHeader>
                   <CardTitle>Manage Holidays</CardTitle>
+                  <CardDescription>Add or remove non-working days.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex gap-2 mb-4">
-                    <Input type="date" ref={newHolidayRef} className="bg-input" />
+                  <div className="flex gap-2 mb-4 items-end">
+                    <div className='flex-1'>
+                       <Label htmlFor="new-holiday" className="text-xs text-muted-foreground">New Holiday Date</Label>
+                       <Input id="new-holiday" type="date" ref={newHolidayRef} className="bg-input" />
+                    </div>
                     <Button size="icon" onClick={handleAddHoliday}><PlusCircle /></Button>
                   </div>
                    <div className="max-h-32 overflow-y-auto space-y-2">
@@ -221,13 +246,20 @@ export default function Home() {
                <Card>
                 <CardHeader>
                   <CardTitle>Manage Special Events</CardTitle>
+                  <CardDescription>Add events that might affect seating.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex gap-2 mb-2">
-                    <Input type="date" ref={newEventDateRef} className="bg-input" />
+                  <div className="flex gap-2 mb-2 items-end">
+                     <div className='flex-1'>
+                        <Label htmlFor="new-event-date" className="text-xs text-muted-foreground">Event Date</Label>
+                        <Input id="new-event-date" type="date" ref={newEventDateRef} className="bg-input" />
+                     </div>
                     <Button size="icon" onClick={handleAddEvent}><PlusCircle /></Button>
                   </div>
-                  <Input placeholder="Event description..." ref={newEventDescRef} className="bg-input mb-4" />
+                   <div className='mb-4'>
+                      <Label htmlFor="new-event-desc" className="text-xs text-muted-foreground">Event Description</Label>
+                      <Input id="new-event-desc" placeholder="e.g. Thanksgiving Day Trip" ref={newEventDescRef} className="bg-input" />
+                   </div>
                    <div className="max-h-32 overflow-y-auto space-y-2">
                     {sortedSpecialEvents.map(([date, desc]) => (
                       <div key={date} className="flex justify-between items-center text-sm p-2 bg-secondary rounded-md">
