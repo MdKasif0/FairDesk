@@ -2,10 +2,10 @@
 
 import { useState, useRef } from 'react';
 import { format, formatDistanceToNow } from 'date-fns';
-import { Camera, MessageCircle, Send, User, Users, Check, X, ThumbsUp, GitPullRequest, Upload } from 'lucide-react';
+import { Camera, MessageCircle, Send, User, Users, Check, ThumbsUp, GitPullRequest, Upload } from 'lucide-react';
 import Image from 'next/image';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -25,9 +25,10 @@ interface DayDetailsProps {
   onUpdateArrangement: (date: Date, updatedArrangement: Arrangement) => void;
   friends: string[];
   seats: string[];
+  currentUser: string;
 }
 
-export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrangement, friends, seats }: DayDetailsProps) {
+export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrangement, friends, seats, currentUser }: DayDetailsProps) {
   const { toast } = useToast();
   const [commentText, setCommentText] = useState('');
   const [showOverrideForm, setShowOverrideForm] = useState(false);
@@ -39,7 +40,7 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
   const handleAddComment = () => {
     if (commentText.trim() === '') return;
     const newComment = {
-      user: 'You', // In a real app, this would be the logged-in user
+      user: currentUser, 
       text: commentText,
       timestamp: new Date().toISOString(),
     };
@@ -54,7 +55,7 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
       const reader = new FileReader();
       reader.onloadend = () => {
         const newPhoto: Photo = {
-          user: 'You', // In a real app, this would be the logged-in user
+          user: currentUser,
           url: reader.result as string,
           timestamp: new Date().toISOString(),
         };
@@ -70,22 +71,32 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
         toast({ variant: 'destructive', title: 'Invalid Proposal', description: 'Please assign a friend to every seat.' });
         return;
     }
+     const newValues = Object.values(overrideProposal);
+    if (new Set(newValues).size !== seats.length) {
+        toast({ variant: 'destructive', title: 'Invalid Proposal', description: 'Each friend must be assigned to exactly one seat.' });
+        return;
+    }
+
     const newOverrideRequest: OverrideRequest = {
-        requester: "You",
+        requester: currentUser,
         newArrangement: overrideProposal,
-        approvals: [],
+        approvals: [currentUser],
         status: 'pending',
     };
     onUpdateArrangement(date, { ...arrangement, override: newOverrideRequest });
     setShowOverrideForm(false);
     setOverrideProposal({});
-    toast({ title: 'Override proposal submitted!', description: 'Waiting for 2 approvals.' });
+    toast({ title: 'Override proposal submitted!', description: 'Waiting for 1 more approval.' });
   }
 
-  const handleApprove = (approver: string) => {
+  const handleApprove = () => {
     if (!arrangement.override) return;
+    const approver = currentUser;
     const existingApprovals = arrangement.override.approvals;
-    if (existingApprovals.includes(approver)) return;
+    if (existingApprovals.includes(approver)) {
+      toast({description: "You've already approved this."})
+      return;
+    }
 
     const newApprovals = [...existingApprovals, approver];
     let newStatus = arrangement.override.status;
@@ -95,6 +106,8 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
         newStatus = 'approved';
         newSeats = arrangement.override.newArrangement;
         toast({ title: 'Override Approved!', description: 'The seating arrangement has been updated.' });
+    } else {
+        toast({ title: 'Approval recorded!', description: `1 more approval needed.` });
     }
 
     onUpdateArrangement(date, {
@@ -110,18 +123,18 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
 
   const getFriendInitial = (name: string) => name ? name.charAt(0).toUpperCase() : <User className="h-4 w-4" />;
   const getAvatarColor = (name: string) => {
+    if (!name) return 'bg-gray-400';
     const colors = ['bg-red-500', 'bg-green-500', 'bg-blue-500', 'bg-yellow-500', 'bg-purple-500', 'bg-pink-500'];
     const charCodeSum = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
     return colors[charCodeSum % colors.length];
   }
-
 
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
       <SheetContent className="sm:max-w-xl w-full flex flex-col">
         <SheetHeader>
           <SheetTitle className="text-2xl font-headline">{format(date, 'EEEE, MMMM do')}</SheetTitle>
-          <SheetDescription>Details for today's seating arrangement.</SheetDescription>
+          <SheetDescription>Details for the seating arrangement.</SheetDescription>
         </SheetHeader>
         <ScrollArea className="flex-1 -mx-6 px-6">
           <div className="space-y-6 py-6">
@@ -132,21 +145,25 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
                   <CardTitle>Seat Assignments</CardTitle>
               </CardHeader>
               <CardContent>
-                <ul className="space-y-4">
-                  {Object.entries(arrangement.seats).map(([seat, friend]) => (
-                    <li key={seat} className="flex items-center justify-between">
-                      <span className="font-medium text-muted-foreground">{seat}</span>
-                      <div className="flex items-center gap-2">
-                        <Avatar className="h-8 w-8">
-                            <AvatarFallback className={cn("text-white", getAvatarColor(friend))}>
-                                {getFriendInitial(friend)}
-                            </AvatarFallback>
-                        </Avatar>
-                        <span className="font-semibold">{friend}</span>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                {Object.keys(arrangement.seats).length > 0 ? (
+                    <ul className="space-y-4">
+                    {seats.map((seat) => (
+                        <li key={seat} className="flex items-center justify-between">
+                        <span className="font-medium text-muted-foreground">{seat}</span>
+                        <div className="flex items-center gap-2">
+                            <Avatar className="h-8 w-8">
+                                <AvatarFallback className={cn("text-white", getAvatarColor(arrangement.seats[seat]))}>
+                                    {getFriendInitial(arrangement.seats[seat])}
+                                </AvatarFallback>
+                            </Avatar>
+                            <span className="font-semibold">{arrangement.seats[seat]}</span>
+                        </div>
+                        </li>
+                    ))}
+                    </ul>
+                ) : (
+                    <p className="text-sm text-muted-foreground text-center py-4">No arrangement for this day.</p>
+                )}
               </CardContent>
             </Card>
 
@@ -193,30 +210,25 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
                                 ))}
                             </div>
                         </div>
-                        {arrangement.override.status === 'pending' && (
+                        {arrangement.override.status === 'pending' && !arrangement.override.approvals.includes(currentUser) && (
                             <div className="mt-4">
-                                <p className="text-sm font-medium mb-2">Approve as:</p>
-                                <div className="flex gap-2 flex-wrap">
-                                {friends
-                                  .filter(f => f !== arrangement.override?.requester)
-                                  .map(f => (
-                                    <Button key={f} size="sm" variant="outline" disabled={arrangement.override.approvals.includes(f)} onClick={() => handleApprove(f)}>
-                                        {arrangement.override.approvals.includes(f) ? <Check className="mr-2 h-4 w-4"/> : <ThumbsUp className="mr-2 h-4 w-4"/>}
-                                        {f}
-                                    </Button>
-                                ))}
-                                </div>
+                               <Button className="w-full" onClick={handleApprove}>
+                                 <ThumbsUp className="mr-2 h-4 w-4"/>
+                                  Approve as {currentUser}
+                                </Button>
                             </div>
                         )}
                     </CardContent>
                 </Card>
             ) : (
-                <div className="text-center">
-                    <Button variant="secondary" onClick={() => setShowOverrideForm(!showOverrideForm)}>
-                        <GitPullRequest className="mr-2 h-4 w-4" />
-                        {showOverrideForm ? 'Cancel Override' : 'Request Override'}
-                    </Button>
-                </div>
+                Object.keys(arrangement.seats).length > 0 && (
+                    <div className="text-center">
+                        <Button variant="secondary" onClick={() => setShowOverrideForm(!showOverrideForm)}>
+                            <GitPullRequest className="mr-2 h-4 w-4" />
+                            {showOverrideForm ? 'Cancel Override' : 'Request Override'}
+                        </Button>
+                    </div>
+                )
             )}
 
             {showOverrideForm && !arrangement.override && (

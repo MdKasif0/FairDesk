@@ -13,7 +13,7 @@ export interface Photo {
 export interface OverrideRequest {
   requester: string;
   newArrangement: Record<string, string>;
-  approvals: string[];
+  approvals: string[]; // List of users who approved
   status: 'pending' | 'approved' | 'rejected';
 }
 

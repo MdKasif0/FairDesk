@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { format, subDays, isWeekend, parseISO, addDays, isValid, parse } from 'date-fns';
-import { Loader2, PlusCircle, Trash2 } from 'lucide-react';
+import { Loader2, PlusCircle, Trash2, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
@@ -18,8 +19,12 @@ import { Label } from '@/components/ui/label';
 
 export default function Home() {
   const { toast } = useToast();
+  const router = useRouter();
 
-  const [friends] = useState(['Alice', 'Bob', 'Charlie']);
+  const [friends, setFriends] = useState<string[]>([]);
+  const [user, setUser] = useState<string | null>(null);
+  const [group, setGroup] = useState<{name: string, inviteCode: string, members: string[]} | null>(null);
+
   const [seats] = useState(['Driver', 'Shotgun', 'Backseat']);
   const [arrangements, setArrangements] = useState<Arrangements>({});
   const [nonWorkingDays, setNonWorkingDays] = useState<string[]>(['2024-12-25']);
@@ -27,12 +32,49 @@ export default function Home() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isClient, setIsClient] = useState(false);
+
 
   const newHolidayRef = useRef<HTMLInputElement>(null);
   const newEventDateRef = useRef<HTMLInputElement>(null);
   const newEventDescRef = useRef<HTMLInputElement>(null);
+  
+  useEffect(() => {
+    setIsClient(true);
+    const loggedInUser = localStorage.getItem('fairseat_user');
+    const groupDataStr = localStorage.getItem('fairseat_group');
+
+    if (!loggedInUser || !groupDataStr) {
+      router.push('/login');
+      return;
+    }
+    
+    setUser(loggedInUser);
+    
+    try {
+        const groupData = JSON.parse(groupDataStr);
+        setGroup(groupData);
+        setFriends(groupData.members);
+
+        if (groupData.members.length < 3) {
+            toast({
+                title: 'Waiting for friends',
+                description: `Invite others with code: ${groupData.inviteCode}. You have ${groupData.members.length}/3 members.`,
+            });
+        }
+        
+    } catch(e) {
+        toast({variant: 'destructive', title: 'Could not load group data'});
+        localStorage.removeItem('fairseat_group');
+        router.push('/login');
+    }
+
+  }, [router, toast]);
+
 
   useEffect(() => {
+    if (friends.length === 0) return;
+
     const mockArrangements: Arrangements = {};
     const today = new Date();
     for (let i = 1; i < 30; i++) {
@@ -41,9 +83,9 @@ export default function Home() {
         const dateStr = format(date, 'yyyy-MM-dd');
         const arrangement: Arrangement = {
           seats: {
-            [seats[0]]: friends[i % 3],
-            [seats[1]]: friends[(i + 1) % 3],
-            [seats[2]]: friends[(i + 2) % 3],
+            [seats[0]]: friends[i % friends.length],
+            [seats[1]]: friends[(i + 1) % friends.length],
+            [seats[2]]: friends[(i + 2) % friends.length],
           },
           comments: [],
           photos: [],
@@ -53,6 +95,13 @@ export default function Home() {
     }
     setArrangements(mockArrangements);
   }, [friends, seats]);
+
+  const handleLogout = () => {
+    localStorage.removeItem('fairseat_user');
+    localStorage.removeItem('fairseat_group');
+    router.push('/login');
+    toast({ title: 'Logged out successfully.' });
+  }
 
   const handleSelectDate = (date: Date) => {
     setSelectedDate(date);
@@ -65,6 +114,14 @@ export default function Home() {
   };
 
   const handleGenerate = async () => {
+    if (friends.length < 3) {
+      toast({
+        variant: 'destructive',
+        title: 'Group Not Full',
+        description: 'You need 3 friends in the group to generate arrangements.',
+      });
+      return;
+    }
     setIsLoading(true);
     try {
       const pastArrangementsForAI = Object.entries(arrangements).map(([date, arrangement]) => ({
@@ -97,7 +154,6 @@ export default function Home() {
         });
         return;
       }
-
 
       setArrangements(prev => ({
         ...prev,
@@ -189,9 +245,18 @@ export default function Home() {
   const sortedNonWorkingDays = useMemo(() => nonWorkingDays.sort((a,b) => a.localeCompare(b)), [nonWorkingDays]);
   const sortedSpecialEvents = useMemo(() => Object.entries(specialEvents).sort(([a], [b]) => a.localeCompare(b)), [specialEvents]);
 
+  if (!isClient || !user || !group) {
+    return (
+      <div className="flex flex-col min-h-screen bg-background items-center justify-center">
+        <Loader2 className="h-16 w-16 animate-spin text-primary" />
+        <p className="mt-4 text-muted-foreground">Loading your FairSeat dashboard...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
-      <Header />
+      <Header user={user} group={group} onLogout={handleLogout} />
       <main className="flex-1 container mx-auto p-4 sm:p-6 lg:p-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
           <div className="lg:col-span-2">
@@ -200,6 +265,7 @@ export default function Home() {
               onSelectDate={handleSelectDate}
               nonWorkingDays={nonWorkingDays.map(d => parseISO(d))}
               specialEvents={specialEvents}
+              friends={friends}
             />
           </div>
           <div className="space-y-8">
@@ -211,10 +277,15 @@ export default function Home() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button onClick={handleGenerate} disabled={isLoading} className="w-full text-lg py-6 rounded-xl">
+                <Button onClick={handleGenerate} disabled={isLoading || friends.length < 3} className="w-full text-lg py-6 rounded-xl">
                   {isLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
                   {isLoading ? 'Optimizing...' : "Generate Next Arrangement"}
                 </Button>
+                {friends.length < 3 && (
+                  <p className="text-xs text-center mt-2 text-destructive">
+                    You need 3 members in your group to generate seats.
+                  </p>
+                )}
               </CardContent>
             </Card>
 
@@ -279,7 +350,7 @@ export default function Home() {
           </div>
         </div>
       </main>
-      {selectedDate && (
+      {selectedDate && user && (
         <DayDetails
           isOpen={isSheetOpen}
           onClose={handleSheetClose}
@@ -288,6 +359,7 @@ export default function Home() {
           onUpdateArrangement={handleUpdateArrangement}
           friends={friends}
           seats={seats}
+          currentUser={user}
         />
       )}
     </div>

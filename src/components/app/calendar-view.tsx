@@ -17,9 +17,10 @@ interface CalendarViewProps {
   onSelectDate: (date: Date) => void;
   nonWorkingDays?: Date[];
   specialEvents?: Record<string, string>;
+  friends: string[];
 }
 
-export function CalendarView({ arrangements, onSelectDate, nonWorkingDays = [], specialEvents = {} }: CalendarViewProps) {
+export function CalendarView({ arrangements, onSelectDate, nonWorkingDays = [], specialEvents = {}, friends }: CalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const firstDayOfMonth = startOfMonth(currentDate);
@@ -38,6 +39,11 @@ export function CalendarView({ arrangements, onSelectDate, nonWorkingDays = [], 
   const getAvatarColor = (name: string) => {
     const colors = ['bg-red-500', 'bg-green-500', 'bg-blue-500', 'bg-yellow-500', 'bg-purple-500', 'bg-pink-500'];
     if (!name) return 'bg-gray-400';
+    // Use friend index for consistent color
+    const friendIndex = friends.indexOf(name);
+    if (friendIndex !== -1) {
+      return colors[friendIndex % colors.length];
+    }
     const charCodeSum = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
     return colors[charCodeSum % colors.length];
   }
@@ -82,7 +88,7 @@ export function CalendarView({ arrangements, onSelectDate, nonWorkingDays = [], 
                   isToday(day) && 'bg-accent/10',
                   isNonWorking && 'bg-muted/30 text-muted-foreground/50'
                 )}
-                onClick={() => !isNonWorking && onSelectDate(day)}
+                onClick={() => onSelectDate(day)}
               >
                 <div className="flex justify-between items-center">
                   <div className={cn(
@@ -105,7 +111,7 @@ export function CalendarView({ arrangements, onSelectDate, nonWorkingDays = [], 
                    )}
                 </div>
 
-                {arrangement ? (
+                {arrangement && Object.keys(arrangement.seats).length > 0 ? (
                   <TooltipProvider>
                     <div className="mt-1 flex-1 flex flex-col justify-end items-start space-y-1">
                       {Object.entries(arrangement.seats).map(([seat, friend]) => (
@@ -131,8 +137,8 @@ export function CalendarView({ arrangements, onSelectDate, nonWorkingDays = [], 
                      </div>
                   )
                 )}
-                 {nonWorkingDays.some(d => isSameDay(d, day)) && (
-                    <div className="absolute inset-0 bg-destructive/10"></div>
+                 {nonWorkingDays.some(d => isSameDay(d, day)) && !isSpecialEvent && (
+                    <div className="absolute inset-0 bg-destructive/5 opacity-50"></div>
                 )}
               </div>
             );
