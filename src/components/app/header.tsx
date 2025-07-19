@@ -1,88 +1,35 @@
-import { Armchair, LogOut, Copy, User, Link as LinkIcon } from 'lucide-react';
+// src/components/app/header.tsx
+import { Menu, User } from 'lucide-react';
 import { Button } from '../ui/button';
-import { useToast } from '@/hooks/use-toast';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import type { Group } from '@/types';
-import type { User as FirebaseUser } from 'firebase/auth';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
-import { useMemo } from 'react';
-
+import type { User as FirebaseUser } from 'firebase/auth';
 
 interface HeaderProps {
     user: FirebaseUser | null;
-    group: Group | null;
+    group: any;
     onLogout: () => void;
 }
 
-
 export function Header({ user, group, onLogout }: HeaderProps) {
-  const { toast } = useToast();
-
-  const inviteLink = useMemo(() => {
-    if (typeof window !== 'undefined' && group) {
-      return `${window.location.origin}/join?groupId=${group.id}`;
-    }
-    return '';
-  }, [group]);
-
-
-  const handleCopyInviteLink = () => {
-    if (inviteLink) {
-        navigator.clipboard.writeText(inviteLink);
-        toast({ title: "Copied!", description: "Invite link copied to clipboard."});
-    }
-  }
-
-  const isGroupFull = group ? group.members.length >= group.seats.length : false;
-  const isCreator = user?.uid === group?.members[0];
-
   return (
-    <header className="bg-background border-b sticky top-0 z-50">
-      <div className="container mx-auto flex items-center justify-between p-4">
-        <div className="flex items-center gap-3">
-          <div className="bg-primary text-primary-foreground p-3 rounded-xl shadow-md">
-            <Armchair className="h-8 w-8" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-foreground">
-              {group?.name || 'FairDesk'}
-            </h1>
-            <p className="text-sm text-muted-foreground">{user ? `Welcome, ${user.displayName || user.email}`: "Next level seat management"}</p>
-          </div>
-        </div>
+    <header className="bg-background sticky top-0 z-10">
+      <div className="container mx-auto flex items-center justify-between p-4 h-20">
         <div className="flex items-center gap-4">
-          {group && isCreator && !isGroupFull && (
-            <TooltipProvider>
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                         <Button variant="secondary" onClick={handleCopyInviteLink}>
-                            <LinkIcon className="h-4 w-4 mr-2"/>
-                            Copy Invite Link
-                         </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                        <p>{inviteLink}</p>
-                    </TooltipContent>
-                </Tooltip>
-            </TooltipProvider>
-          )}
-          {user && (
-             <div className="flex items-center gap-4">
-                <Avatar className="h-9 w-9">
-                    <AvatarImage src={user.photoURL || undefined} alt={user.displayName || 'User'}/>
-                    <AvatarFallback>{user.displayName ? user.displayName.charAt(0) : <User />}</AvatarFallback>
+            <Button variant="ghost" size="icon">
+                <Menu className="h-6 w-6" />
+            </Button>
+            <h1 className="text-2xl font-bold text-foreground">
+              FairDesk
+            </h1>
+        </div>
+        <div className="relative">
+            <Button variant="ghost" size="icon" className="relative">
+                 <Avatar className="h-9 w-9">
+                    <AvatarImage src={user?.photoURL || undefined} alt={user?.displayName || 'User'}/>
+                    <AvatarFallback>{user?.displayName ? user.displayName.charAt(0) : <User />}</AvatarFallback>
                 </Avatar>
-                <Button variant="outline" size="sm" onClick={onLogout}>
-                  <LogOut className="mr-2 h-4 w-4"/>
-                  Logout
-                </Button>
-            </div>
-          )}
+            </Button>
+            <span className="absolute top-0 right-0 block h-3 w-3 rounded-full bg-red-500 ring-2 ring-white" />
         </div>
       </div>
     </header>
