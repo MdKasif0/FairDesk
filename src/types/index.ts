@@ -6,7 +6,7 @@ export interface Comment {
 
 export interface Photo {
   user: string;
-  url: string;
+  url: string; // Will store as a data URI
   timestamp: string;
 }
 

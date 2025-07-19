@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { format, formatDistanceToNow } from 'date-fns';
-import { Camera, MessageCircle, Send, User, Users, Check, X, ThumbsUp, GitPullRequest } from 'lucide-react';
+import { Camera, MessageCircle, Send, User, Users, Check, X, ThumbsUp, GitPullRequest, Upload } from 'lucide-react';
 import Image from 'next/image';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from '@/lib/utils';
-import type { Arrangement, OverrideRequest } from '@/types';
+import type { Arrangement, OverrideRequest, Photo } from '@/types';
 
 interface DayDetailsProps {
   isOpen: boolean;
@@ -32,6 +32,7 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
   const [commentText, setCommentText] = useState('');
   const [showOverrideForm, setShowOverrideForm] = useState(false);
   const [overrideProposal, setOverrideProposal] = useState<Record<string, string>>({});
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   if (!arrangement) return null;
 
@@ -47,6 +48,23 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
     toast({ title: 'Comment added!' });
   };
   
+  const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const newPhoto: Photo = {
+          user: 'You', // In a real app, this would be the logged-in user
+          url: reader.result as string,
+          timestamp: new Date().toISOString(),
+        };
+        onUpdateArrangement(date, { ...arrangement, photos: [...arrangement.photos, newPhoto] });
+        toast({ title: 'Photo uploaded!' });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleProposeOverride = () => {
     if (Object.keys(overrideProposal).length !== seats.length) {
         toast({ variant: 'destructive', title: 'Invalid Proposal', description: 'Please assign a friend to every seat.' });
@@ -134,14 +152,19 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
 
             {arrangement.override ? (
                 <Card className={cn(
-                    arrangement.override.status === 'approved' && 'border-green-500',
-                    arrangement.override.status === 'pending' && 'border-accent',
+                    'border-2',
+                    arrangement.override.status === 'approved' && 'border-green-500 bg-green-500/10',
+                    arrangement.override.status === 'pending' && 'border-accent bg-accent/10',
+                    arrangement.override.status === 'rejected' && 'border-destructive bg-destructive/10',
                 )}>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <GitPullRequest className="h-5 w-5"/>
                             Override Request
-                            <Badge variant={arrangement.override.status === 'approved' ? 'default' : 'secondary'} className={cn(arrangement.override.status === 'approved' ? 'bg-green-600' : 'bg-accent text-accent-foreground')}>
+                            <Badge variant={arrangement.override.status === 'approved' ? 'default' : 'secondary'} className={cn(
+                              arrangement.override.status === 'approved' ? 'bg-green-600' : 
+                              arrangement.override.status === 'pending' ? 'bg-accent text-accent-foreground' : 'bg-destructive'
+                              )}>
                                 {arrangement.override.status}
                             </Badge>
                         </CardTitle>
@@ -173,10 +196,12 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
                         {arrangement.override.status === 'pending' && (
                             <div className="mt-4">
                                 <p className="text-sm font-medium mb-2">Approve as:</p>
-                                <div className="flex gap-2">
-                                {friends.map(f => (
+                                <div className="flex gap-2 flex-wrap">
+                                {friends
+                                  .filter(f => f !== arrangement.override?.requester)
+                                  .map(f => (
                                     <Button key={f} size="sm" variant="outline" disabled={arrangement.override.approvals.includes(f)} onClick={() => handleApprove(f)}>
-                                        <Check className={cn("mr-2 h-4 w-4", !arrangement.override.approvals.includes(f) && 'hidden')}/>
+                                        {arrangement.override.approvals.includes(f) ? <Check className="mr-2 h-4 w-4"/> : <ThumbsUp className="mr-2 h-4 w-4"/>}
                                         {f}
                                     </Button>
                                 ))}
@@ -220,11 +245,44 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
 
             <Card>
               <CardHeader className="flex flex-row items-center gap-4">
+                <Camera className="h-6 w-6 text-primary" />
+                <CardTitle>Photos</CardTitle>
+              </CardHeader>
+              <CardContent>
+                 <div className="grid grid-cols-2 gap-4">
+                  {arrangement.photos.map((photo, index) => (
+                    <div key={index} className="relative aspect-square bg-muted rounded-lg overflow-hidden">
+                      <Image src={photo.url} alt={`Seat photo ${index + 1}`} layout="fill" objectFit="cover" />
+                       <div className="absolute bottom-0 w-full bg-black/50 text-white p-1 text-xs">
+                          {photo.user} - {formatDistanceToNow(new Date(photo.timestamp), { addSuffix: true })}
+                       </div>
+                    </div>
+                  ))}
+                  {arrangement.photos.length === 0 && (
+                     <div className="col-span-2 text-center text-sm text-muted-foreground p-4">No photos for this day.</div>
+                  )}
+                 </div>
+                 <Button variant="outline" className="w-full mt-4" onClick={() => photoInputRef.current?.click()}>
+                    <Upload className="mr-2 h-4 w-4"/>
+                    Upload Photo
+                 </Button>
+                 <input
+                    type="file"
+                    ref={photoInputRef}
+                    onChange={handlePhotoUpload}
+                    className="hidden"
+                    accept="image/*"
+                  />
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center gap-4">
                 <MessageCircle className="h-6 w-6 text-primary" />
                 <CardTitle>Comments</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
+              <CardContent className="p-0">
+                <div className="space-y-4 p-6">
                   {arrangement.comments.map((comment, index) => (
                     <div key={index} className="flex gap-3">
                        <Avatar className="h-8 w-8">
@@ -241,25 +299,12 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
               </CardContent>
               <SheetFooter className="bg-card p-4 border-t">
                  <div className="flex w-full items-center gap-2">
-                    <Input placeholder="Add a comment..." value={commentText} onChange={(e) => setCommentText(e.target.value)} />
+                    <Input placeholder="Add a comment..." value={commentText} onChange={(e) => setCommentText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleAddComment()} />
                     <Button size="icon" onClick={handleAddComment}><Send className="h-4 w-4"/></Button>
                  </div>
               </SheetFooter>
             </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center gap-4">
-                <Camera className="h-6 w-6 text-primary" />
-                <CardTitle>Photos</CardTitle>
-              </CardHeader>
-              <CardContent>
-                 <div className="grid grid-cols-2 gap-4">
-                     <div data-ai-hint="office desk" className="relative aspect-square bg-muted rounded-lg overflow-hidden"><Image src="https://placehold.co/400x400.png" alt="Seat photo 1" layout="fill" objectFit="cover" /></div>
-                     <div data-ai-hint="computer monitor" className="relative aspect-square bg-muted rounded-lg overflow-hidden"><Image src="https://placehold.co/400x400.png" alt="Seat photo 2" layout="fill" objectFit="cover" /></div>
-                 </div>
-                 <Button variant="outline" className="w-full mt-4"><Camera className="mr-2 h-4 w-4"/>Upload Photo</Button>
-              </CardContent>
-            </Card>
           </div>
         </ScrollArea>
       </SheetContent>
