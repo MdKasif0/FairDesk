@@ -184,7 +184,7 @@ export default function GroupSetupPage() {
             <Armchair className="h-10 w-10" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Welcome to FairSeat</h1>
+            <h1 className="text-3xl font-bold text-foreground">Welcome to FairDesk</h1>
             <p className="text-muted-foreground">{user.displayName || user.email}</p>
           </div>
         </div>

@@ -41,7 +41,7 @@ export function Header({ user, group, onLogout }: HeaderProps) {
           </div>
           <div>
             <h1 className="text-xl font-bold text-foreground">
-              {group?.name || 'FairSeat'}
+              {group?.name || 'FairDesk'}
             </h1>
             <p className="text-sm text-muted-foreground">{user ? `Welcome, ${user.displayName || user.email}`: "Next level seat management"}</p>
           </div>

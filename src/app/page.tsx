@@ -374,7 +374,7 @@ export default function Home() {
     return (
       <div className="flex flex-col min-h-screen bg-background items-center justify-center">
         <Loader2 className="h-16 w-16 animate-spin text-primary" />
-        <p className="mt-4 text-muted-foreground">Loading your FairSeat dashboard...</p>
+        <p className="mt-4 text-muted-foreground">Loading your FairDesk dashboard...</p>
       </div>
     );
   }
@@ -535,5 +535,3 @@ export default function Home() {
     </div>
   );
 }
-
-    

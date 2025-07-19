@@ -54,7 +54,7 @@ export default function LoginPage() {
                 <Armchair className="h-10 w-10" />
             </div>
             <div>
-                <h1 className="text-3xl font-bold text-foreground">FairSeat</h1>
+                <h1 className="text-3xl font-bold text-foreground">FairDesk</h1>
                 <p className="text-muted-foreground">Welcome back!</p>
             </div>
         </div>
