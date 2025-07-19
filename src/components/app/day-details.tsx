@@ -46,7 +46,7 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
       text: commentText,
       timestamp: new Date().toISOString(),
     };
-    onUpdateArrangement(date, { ...arrangement, comments: [...arrangement.comments, newComment] });
+    onUpdateArrangement(date, { ...arrangement, comments: [...(arrangement.comments || []), newComment] });
     setCommentText('');
     toast({ title: 'Comment added!' });
   };
@@ -61,7 +61,7 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
           url: reader.result as string,
           timestamp: new Date().toISOString(),
         };
-        onUpdateArrangement(date, { ...arrangement, photos: [...arrangement.photos, newPhoto] });
+        onUpdateArrangement(date, { ...arrangement, photos: [...(arrangement.photos || []), newPhoto] });
         toast({ title: 'Photo uploaded!' });
       };
       reader.readAsDataURL(file);
@@ -84,8 +84,9 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
         newArrangement: overrideProposal,
         approvals: [currentUser.displayName],
         status: 'pending',
+        timestamp: new Date().toISOString(),
     };
-    onUpdateArrangement(date, { ...arrangement, override: newOverrideRequest });
+    onUpdateArrangement(date, { ...arrangement, override: newOverrideRequest, seats: arrangement.seats || {} });
     setShowOverrideForm(false);
     setOverrideProposal({});
     toast({ title: 'Override proposal submitted!', description: 'Waiting for 1 more approval.' });
@@ -145,6 +146,7 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
                     <ul className="space-y-4">
                     {seats.map((seat) => {
                       const friendName = arrangement.seats[seat];
+                      if (!friendName) return null;
                       const friend = findFriendByName(friendName);
                       return (
                         <li key={seat} className="flex items-center justify-between">
@@ -184,7 +186,9 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
                                 {arrangement.override.status}
                             </Badge>
                         </CardTitle>
-                        <CardDescription>Requested by: {arrangement.override.requester}</CardDescription>
+                        <CardDescription>
+                            Requested by {arrangement.override.requester} {formatDistanceToNow(new Date(arrangement.override.timestamp), { addSuffix: true })}
+                        </CardDescription>
                     </CardHeader>
                     <CardContent>
                         <p className="font-semibold mb-2">Proposed Arrangement:</p>
@@ -264,7 +268,7 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
               </CardHeader>
               <CardContent>
                  <div className="grid grid-cols-2 gap-4">
-                  {arrangement.photos.map((photo, index) => (
+                  {(arrangement.photos || []).map((photo, index) => (
                     <div key={index} className="relative aspect-square bg-muted rounded-lg overflow-hidden">
                       <NextImage src={photo.url} alt={`Seat photo ${index + 1}`} layout="fill" objectFit="cover" />
                        <div className="absolute bottom-0 w-full bg-black/50 text-white p-1 text-xs">
@@ -272,7 +276,7 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
                        </div>
                     </div>
                   ))}
-                  {arrangement.photos.length === 0 && (
+                  {(arrangement.photos || []).length === 0 && (
                      <div className="col-span-2 text-center text-sm text-muted-foreground p-4">No photos for this day.</div>
                   )}
                  </div>
@@ -297,7 +301,7 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
               </CardHeader>
               <CardContent className="p-0">
                 <div className="space-y-4 p-6">
-                  {arrangement.comments.map((comment, index) => {
+                  {(arrangement.comments || []).map((comment, index) => {
                     const friend = findFriendByName(comment.user);
                     return (
                     <div key={index} className="flex gap-3">
@@ -311,7 +315,7 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
                       </div>
                     </div>
                   )})}
-                  {arrangement.comments.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No comments yet.</p>}
+                  {(arrangement.comments || []).length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No comments yet.</p>}
                 </div>
               </CardContent>
               <SheetFooter className="bg-card p-4 border-t">

@@ -15,6 +15,7 @@ export interface OverrideRequest {
   newArrangement: Record<string, string>;
   approvals: string[]; // List of users who approved
   status: 'pending' | 'approved' | 'rejected';
+  timestamp: string;
 }
 
 export interface Arrangement {

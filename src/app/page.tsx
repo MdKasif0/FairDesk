@@ -194,6 +194,12 @@ export default function Home() {
     if (!group) return;
     const dateStr = format(date, 'yyyy-MM-dd');
     
+    // Optimistically update local state for better UX
+    setArrangements(prev => ({
+        ...prev,
+        [dateStr]: updatedArrangement,
+    }));
+
     const groupRef = doc(db, 'groups', group.id);
     try {
       const batch = writeBatch(db);
@@ -204,6 +210,13 @@ export default function Home() {
     } catch (error) {
       console.error("Error updating arrangement:", error);
       toast({ variant: 'destructive', title: 'Update failed', description: 'Could not save changes.' });
+       // Revert optimistic update on failure
+      // Note: A more robust solution might fetch the latest from DB.
+      onSnapshot(doc(db, 'groups', group.id), (groupDoc) => {
+        if (groupDoc.exists()) {
+          setArrangements(groupDoc.data().arrangements || {});
+        }
+      });
     }
   };
   
