@@ -87,7 +87,7 @@ export default function RegisterPage() {
             <CardDescription>
                 Fill in the details below to create your account.
             </CardDescription>
-          </Header>
+          </CardHeader>
           <CardContent>
             <div className="space-y-4">
                 <div>
