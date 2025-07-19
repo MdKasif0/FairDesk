@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { format, parseISO } from 'date-fns';
 import { Loader2, DoorOpen, Calendar as CalendarIcon, ChevronRight } from 'lucide-react';
-import { onSnapshot, doc } from 'firebase/firestore';
+import { onSnapshot, doc, getDoc } from 'firebase/firestore';
 
 import { useAuth } from '@/hooks/useAuth';
 import { db } from '@/lib/firebase';
