@@ -2,7 +2,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Armchair, LogIn, Mail } from 'lucide-react';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 
@@ -17,6 +17,7 @@ import { auth } from '@/lib/firebase';
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -32,7 +33,10 @@ export default function LoginPage() {
     try {
       await signInWithEmailAndPassword(auth, email, password);
       toast({ title: 'Logged in successfully!' });
-      router.push('/');
+      
+      const redirectUrl = searchParams.get('redirect');
+      router.push(redirectUrl || '/');
+
     } catch (error: any) {
       console.error("Login failed:", error);
       toast({

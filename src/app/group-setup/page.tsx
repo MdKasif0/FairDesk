@@ -11,19 +11,13 @@ import {
   doc,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Armchair, Loader2, LogOut, Users, UserPlus, Trash2, PlusCircle } from 'lucide-react';
+import { Armchair, Loader2, LogOut, Users, PlusCircle, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { auth } from '@/lib/firebase';
-import { joinGroup } from '@/ai/flows/join-group';
-
-function generateInviteCode() {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
-}
 
 export default function GroupSetupPage() {
   const { user, loading } = useAuth();
@@ -32,9 +26,7 @@ export default function GroupSetupPage() {
 
   const [groupName, setGroupName] = useState('');
   const [seats, setSeats] = useState<string[]>(['Seat 1', 'Seat 2', 'Seat 3']);
-  const [inviteCode, setInviteCode] = useState('');
   const [isCreating, setIsCreating] = useState(false);
-  const [isJoining, setIsJoining] = useState(false);
 
   const handleSeatChange = (index: number, value: string) => {
     const newSeats = [...seats];
@@ -55,7 +47,6 @@ export default function GroupSetupPage() {
     }
   };
 
-
   const handleCreateGroup = async () => {
     if (!user) return;
     if (!groupName) {
@@ -73,14 +64,12 @@ export default function GroupSetupPage() {
 
     setIsCreating(true);
     try {
-      const newInviteCode = generateInviteCode();
       const batch = writeBatch(db);
 
       const newGroupRef = doc(collection(db, 'groups'));
       
       batch.set(newGroupRef, {
         name: groupName,
-        inviteCode: newInviteCode,
         members: [user.uid],
         seats: seats.map(s => s.trim()),
         arrangements: {},
@@ -100,34 +89,6 @@ export default function GroupSetupPage() {
       toast({ variant: 'destructive', title: 'Could not create group.', description: 'Please check your Firestore rules.' });
     } finally {
       setIsCreating(false);
-    }
-  };
-
-  const handleJoinGroup = async () => {
-    if (!user) return;
-    if (!inviteCode) {
-      toast({ variant: 'destructive', title: 'Invite code is required.' });
-      return;
-    }
-    setIsJoining(true);
-    try {
-      const result = await joinGroup({
-        inviteCode: inviteCode.trim(),
-        user: { uid: user.uid },
-      });
-
-      if (result.success) {
-        toast({ title: 'Joined group successfully!', description: 'Welcome!' });
-        router.push('/');
-      } else {
-        toast({ variant: 'destructive', title: 'Could not join group.', description: result.message });
-      }
-
-    } catch (error) {
-      console.error('Error joining group:', error);
-      toast({ variant: 'destructive', title: 'An unexpected error occurred.' });
-    } finally {
-      setIsJoining(false);
     }
   };
   
@@ -160,75 +121,49 @@ export default function GroupSetupPage() {
 
         <Card className="shadow-2xl">
           <CardHeader>
-            <CardTitle>Join or Create a Group</CardTitle>
+            <CardTitle>Create a Group</CardTitle>
             <CardDescription>
-              To start assigning seats, you need to be in a group with your friends.
+              To start assigning seats, you need to create a group and invite your friends.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="join">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="join">Join Group</TabsTrigger>
-                <TabsTrigger value="create">Create Group</TabsTrigger>
-              </TabsList>
-              <TabsContent value="join" className="pt-4">
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="invite-code">Invite Code</Label>
-                    <Input
-                      id="invite-code"
-                      placeholder="e.g. ABCDEF"
-                      value={inviteCode}
-                      onChange={(e) => setInviteCode(e.target.value)}
-                      disabled={isJoining}
-                    />
-                  </div>
-                  <Button onClick={handleJoinGroup} className="w-full" disabled={isJoining}>
-                    {isJoining ? <Loader2 className="mr-2" /> : <UserPlus className="mr-2" />}
-                    {isJoining ? 'Joining...' : 'Join Group'}
-                  </Button>
-                </div>
-              </TabsContent>
-              <TabsContent value="create" className="pt-4">
-                 <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="group-name">Group Name</Label>
-                    <Input
-                      id="group-name"
-                      placeholder="e.g. The Carpool Crew"
-                      value={groupName}
-                      onChange={(e) => setGroupName(e.target.value)}
-                      disabled={isCreating}
-                    />
-                  </div>
-                   <div>
-                    <Label>Seats</Label>
-                    <div className="space-y-2">
-                      {seats.map((seat, index) => (
-                        <div key={index} className="flex items-center gap-2">
-                          <Input
-                            value={seat}
-                            onChange={(e) => handleSeatChange(index, e.target.value)}
-                            disabled={isCreating}
-                            placeholder={`Seat ${index + 1}`}
-                          />
-                          <Button variant="ghost" size="icon" onClick={() => removeSeat(index)} disabled={isCreating || seats.length <= 2}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
+             <div className="space-y-4">
+              <div>
+                <Label htmlFor="group-name">Group Name</Label>
+                <Input
+                  id="group-name"
+                  placeholder="e.g. The Carpool Crew"
+                  value={groupName}
+                  onChange={(e) => setGroupName(e.target.value)}
+                  disabled={isCreating}
+                />
+              </div>
+               <div>
+                <Label>Seats</Label>
+                <div className="space-y-2">
+                  {seats.map((seat, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <Input
+                        value={seat}
+                        onChange={(e) => handleSeatChange(index, e.target.value)}
+                        disabled={isCreating}
+                        placeholder={`Seat ${index + 1}`}
+                      />
+                      <Button variant="ghost" size="icon" onClick={() => removeSeat(index)} disabled={isCreating || seats.length <= 2}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
-                    <Button variant="outline" size="sm" className="mt-2" onClick={addSeat} disabled={isCreating}>
-                      <PlusCircle className="mr-2 h-4 w-4" /> Add Seat
-                    </Button>
-                  </div>
-                  <Button onClick={handleCreateGroup} className="w-full" disabled={isCreating}>
-                    {isCreating ? <Loader2 className="mr-2" /> : <Users className="mr-2" />}
-                    {isCreating ? 'Creating...' : 'Create Group'}
-                  </Button>
+                  ))}
                 </div>
-              </TabsContent>
-            </Tabs>
+                <Button variant="outline" size="sm" className="mt-2" onClick={addSeat} disabled={isCreating}>
+                  <PlusCircle className="mr-2 h-4 w-4" /> Add Seat
+                </Button>
+              </div>
+              <Button onClick={handleCreateGroup} className="w-full" disabled={isCreating}>
+                {isCreating ? <Loader2 className="mr-2" /> : <Users className="mr-2" />}
+                {isCreating ? 'Creating...' : 'Create Group and Get Invite Link'}
+              </Button>
+            </div>
           </CardContent>
         </Card>
         <div className="text-center mt-4">

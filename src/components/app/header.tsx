@@ -1,4 +1,4 @@
-import { Armchair, LogOut, Copy, User, Users } from 'lucide-react';
+import { Armchair, LogOut, Copy, User, Link as LinkIcon } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -7,10 +7,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Badge } from '../ui/badge';
 import type { Group } from '@/types';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
+import { useMemo } from 'react';
 
 
 interface HeaderProps {
@@ -23,14 +23,23 @@ interface HeaderProps {
 export function Header({ user, group, onLogout }: HeaderProps) {
   const { toast } = useToast();
 
-  const handleCopyInviteCode = () => {
-    if (group?.inviteCode) {
-        navigator.clipboard.writeText(group.inviteCode);
-        toast({ title: "Copied!", description: "Invite code copied to clipboard."});
+  const inviteLink = useMemo(() => {
+    if (typeof window !== 'undefined' && group) {
+      return `${window.location.origin}/join?groupId=${group.id}`;
+    }
+    return '';
+  }, [group]);
+
+
+  const handleCopyInviteLink = () => {
+    if (inviteLink) {
+        navigator.clipboard.writeText(inviteLink);
+        toast({ title: "Copied!", description: "Invite link copied to clipboard."});
     }
   }
 
   const isGroupFull = group ? group.members.length >= group.seats.length : false;
+  const isCreator = user?.uid === group?.members[0];
 
   return (
     <header className="bg-background border-b sticky top-0 z-50">
@@ -47,18 +56,17 @@ export function Header({ user, group, onLogout }: HeaderProps) {
           </div>
         </div>
         <div className="flex items-center gap-4">
-          {group && !isGroupFull && (
+          {group && isCreator && !isGroupFull && (
             <TooltipProvider>
                 <Tooltip>
                     <TooltipTrigger asChild>
-                         <Badge variant="secondary" className="cursor-pointer" onClick={handleCopyInviteCode}>
-                            <Users className="h-3 w-3 mr-2"/>
-                            {group.members.length} / {group.seats.length} Members | Invite Code: {group.inviteCode}
-                            <Copy className="h-3 w-3 ml-2"/>
-                         </Badge>
+                         <Button variant="secondary" onClick={handleCopyInviteLink}>
+                            <LinkIcon className="h-4 w-4 mr-2"/>
+                            Copy Invite Link
+                         </Button>
                     </TooltipTrigger>
                     <TooltipContent>
-                        <p>Click to copy invite code</p>
+                        <p>{inviteLink}</p>
                     </TooltipContent>
                 </Tooltip>
             </TooltipProvider>

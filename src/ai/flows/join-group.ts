@@ -2,7 +2,7 @@
 'use server';
 
 /**
- * @fileOverview A secure, server-side flow for a user to join a group.
+ * @fileOverview A secure, server-side flow for a user to join a group using a group ID.
  *
  * - joinGroup - The main function to handle a user joining a group.
  * - JoinGroupInput - Input type for joinGroup.
@@ -11,17 +11,14 @@
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 import {
-  collection,
-  query,
-  where,
-  getDocs,
-  writeBatch,
   doc,
+  getDoc,
+  writeBatch,
 } from 'firebase/firestore';
 import {db} from '@/lib/firebase-admin'; // Use admin SDK
 
 const JoinGroupInputSchema = z.object({
-  inviteCode: z.string().trim().min(1, {message: 'Invite code is required.'}),
+  groupId: z.string().trim().min(1, {message: 'Group ID is required.'}),
   user: z.object({
     uid: z.string(),
   }),
@@ -47,25 +44,21 @@ const joinGroupFlow = ai.defineFlow(
     inputSchema: JoinGroupInputSchema,
     outputSchema: JoinGroupOutputSchema,
   },
-  async ({inviteCode, user}) => {
+  async ({groupId, user}) => {
     try {
-      const q = query(
-        collection(db, 'groups'),
-        where('inviteCode', '==', inviteCode)
-      );
-      const querySnapshot = await getDocs(q);
+      const groupRef = doc(db, 'groups', groupId);
+      const groupDoc = await getDoc(groupRef);
 
-      if (querySnapshot.empty) {
-        return {success: false, message: 'Invalid Invite Code'};
+      if (!groupDoc.exists()) {
+        return {success: false, message: 'Invalid Invite Link. Group not found.'};
       }
-
-      const groupDoc = querySnapshot.docs[0];
+      
       const groupData = groupDoc.data();
 
       if (groupData.members.includes(user.uid)) {
         return {
           success: true,
-          message: "You're already in this group.",
+          message: "You're already in this group. Redirecting to dashboard...",
           groupId: groupDoc.id,
         };
       }
@@ -73,14 +66,14 @@ const joinGroupFlow = ai.defineFlow(
       if (groupData.members.length >= groupData.seats.length) {
         return {
           success: false,
-          message: `Group is full. This group only has ${groupData.seats.length} seats available.`,
+          message: `This group is full. It only has ${groupData.seats.length} seats available.`,
         };
       }
 
       const batch = writeBatch(db);
 
       // Add user to group's member list
-      batch.update(groupDoc.ref, {
+      batch.update(groupRef, {
         members: [...groupData.members, user.uid],
       });
 
@@ -92,7 +85,7 @@ const joinGroupFlow = ai.defineFlow(
 
       return {
         success: true,
-        message: 'Joined group successfully!',
+        message: 'Joined group successfully! Welcome!',
         groupId: groupDoc.id,
       };
     } catch (error: any) {
