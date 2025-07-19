@@ -32,6 +32,7 @@ export interface UserProfile {
   displayName: string;
   email: string;
   groupId: string | null;
+  photoURL: string | null;
 }
 
 export interface Group {
@@ -43,5 +44,3 @@ export interface Group {
   nonWorkingDays: string[];
   specialEvents: Record<string, string>;
 }
-
-    

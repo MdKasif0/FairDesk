@@ -38,9 +38,11 @@ export default function RegisterPage() {
       // 1. Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
+      
+      const photoURL = `https://placehold.co/100x100.png?text=${displayName.charAt(0).toUpperCase()}`;
 
       // 2. Update Auth profile
-      await updateProfile(user, { displayName });
+      await updateProfile(user, { displayName, photoURL });
       
       // 3. Create user document in Firestore
       await setDoc(doc(db, 'users', user.uid), {
@@ -48,6 +50,7 @@ export default function RegisterPage() {
         displayName: displayName,
         email: user.email,
         groupId: null, // Initially, user is not in a group
+        photoURL: photoURL,
       });
 
 
@@ -141,5 +144,3 @@ export default function RegisterPage() {
     </div>
   );
 }
-
-    

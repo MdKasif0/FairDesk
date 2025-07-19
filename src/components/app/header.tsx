@@ -1,4 +1,4 @@
-import { Armchair, LogOut, Copy } from 'lucide-react';
+import { Armchair, LogOut, Copy, User } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -9,10 +9,12 @@ import {
 } from '@/components/ui/tooltip';
 import { Badge } from '../ui/badge';
 import type { Group } from '@/types';
+import type { User as FirebaseUser } from 'firebase/auth';
+import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 
 
 interface HeaderProps {
-    user: string | null;
+    user: FirebaseUser | null;
     group: Group | null;
     onLogout: () => void;
 }
@@ -39,7 +41,7 @@ export function Header({ user, group, onLogout }: HeaderProps) {
             <h1 className="text-xl font-bold text-foreground">
               {group?.name || 'FairSeat'}
             </h1>
-            <p className="text-sm text-muted-foreground">{user ? `Welcome, ${user}`: "Next level seat management"}</p>
+            <p className="text-sm text-muted-foreground">{user ? `Welcome, ${user.displayName || user.email}`: "Next level seat management"}</p>
           </div>
         </div>
         <div className="flex items-center gap-4">
@@ -59,15 +61,19 @@ export function Header({ user, group, onLogout }: HeaderProps) {
             </TooltipProvider>
           )}
           {user && (
-            <Button variant="outline" size="sm" onClick={onLogout}>
-              <LogOut className="mr-2 h-4 w-4"/>
-              Logout
-            </Button>
+             <div className="flex items-center gap-4">
+                <Avatar className="h-9 w-9">
+                    <AvatarImage src={user.photoURL || undefined} alt={user.displayName || 'User'}/>
+                    <AvatarFallback>{user.displayName ? user.displayName.charAt(0) : <User />}</AvatarFallback>
+                </Avatar>
+                <Button variant="outline" size="sm" onClick={onLogout}>
+                  <LogOut className="mr-2 h-4 w-4"/>
+                  Logout
+                </Button>
+            </div>
           )}
         </div>
       </div>
     </header>
   );
 }
-
-    

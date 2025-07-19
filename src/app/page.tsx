@@ -275,6 +275,8 @@ export default function Home() {
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
     return arrangements[dateStr] || { seats: {}, comments: [], photos: [] };
   }, [selectedDate, arrangements]);
+  
+  const currentUserProfile = useMemo(() => friends.find(f => f.uid === user?.uid), [friends, user]);
 
   const sortedNonWorkingDays = useMemo(() => (group?.nonWorkingDays || []).sort((a,b) => a.localeCompare(b)), [group]);
   const sortedSpecialEvents = useMemo(() => Object.entries(group?.specialEvents || {}).sort(([a], [b]) => a.localeCompare(b)), [group]);
@@ -290,7 +292,7 @@ export default function Home() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
-      <Header user={user?.displayName || user?.email || 'User'} group={group} onLogout={handleLogout} />
+      <Header user={user} group={group} onLogout={handleLogout} />
       <main className="flex-1 container mx-auto p-4 sm:p-6 lg:p-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
           <div className="lg:col-span-2">
@@ -299,7 +301,7 @@ export default function Home() {
               onSelectDate={handleSelectDate}
               nonWorkingDays={(group.nonWorkingDays || []).map(d => parseISO(d))}
               specialEvents={group.specialEvents || {}}
-              friends={friends.map(f => f.displayName)}
+              friends={friends}
             />
           </div>
           <div className="space-y-8">
@@ -380,24 +382,22 @@ export default function Home() {
               </Card>
             </div>
             
-            <FairnessStats arrangements={arrangements} friends={friends.map(f => f.displayName)} seats={seats} />
+            <FairnessStats arrangements={arrangements} friends={friends} seats={seats} />
           </div>
         </div>
       </main>
-      {selectedDate && user && (
+      {selectedDate && user && currentUserProfile && (
         <DayDetails
           isOpen={isSheetOpen}
           onClose={handleSheetClose}
           date={selectedDate}
           arrangement={selectedArrangement}
           onUpdateArrangement={handleUpdateArrangement}
-          friends={friends.map(f => f.displayName)}
+          friends={friends}
           seats={seats}
-          currentUser={user.displayName || user.email!}
+          currentUser={currentUserProfile}
         />
       )}
     </div>
   );
 }
-
-    

@@ -4,19 +4,23 @@ import { useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import type { Arrangements } from '@/types';
+import type { Arrangements, UserProfile } from '@/types';
 import { TrendingUp, Percent } from 'lucide-react';
+import { Avatar, AvatarImage, AvatarFallback } from '../ui/avatar';
+import { getFriendInitial } from '@/lib/utils';
 
 interface FairnessStatsProps {
   arrangements: Arrangements;
-  friends: string[];
+  friends: UserProfile[];
   seats: string[];
 }
 
 export function FairnessStats({ arrangements, friends, seats }: FairnessStatsProps) {
+  const friendNames = useMemo(() => friends.map(f => f.displayName), [friends]);
+
   const stats = useMemo(() => {
     const initialStats: Record<string, Record<string, number>> = {};
-    friends.forEach(friend => {
+    friendNames.forEach(friend => {
       initialStats[friend] = {};
       seats.forEach(seat => {
         initialStats[friend][seat] = 0;
@@ -32,7 +36,7 @@ export function FairnessStats({ arrangements, friends, seats }: FairnessStatsPro
     });
 
     return initialStats;
-  }, [arrangements, friends, seats]);
+  }, [arrangements, friendNames, seats]);
 
   const totalAssignments = useMemo(() => Object.values(arrangements).length, [arrangements]);
 
@@ -60,11 +64,19 @@ export function FairnessStats({ arrangements, friends, seats }: FairnessStatsPro
             </TableHeader>
             <TableBody>
               {friends.map(friend => (
-                <TableRow key={friend}>
-                  <TableCell className="font-medium">{friend}</TableCell>
+                <TableRow key={friend.uid}>
+                  <TableCell className="font-medium">
+                    <div className="flex items-center gap-2">
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={friend.photoURL || undefined} alt={friend.displayName} />
+                        <AvatarFallback>{getFriendInitial(friend.displayName)}</AvatarFallback>
+                      </Avatar>
+                      <span>{friend.displayName}</span>
+                    </div>
+                  </TableCell>
                   {seats.map(seat => (
                     <TableCell key={seat} className="text-right">
-                      <Badge variant="secondary" className="text-sm font-mono">{stats[friend]?.[seat] || 0}</Badge>
+                      <Badge variant="secondary" className="text-sm font-mono">{stats[friend.displayName]?.[seat] || 0}</Badge>
                     </TableCell>
                   ))}
                 </TableRow>

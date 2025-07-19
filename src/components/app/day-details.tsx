@@ -3,9 +3,9 @@
 import { useState, useRef } from 'react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { Camera, MessageCircle, Send, User, Users, Check, ThumbsUp, GitPullRequest, Upload } from 'lucide-react';
-import Image from 'next/image';
+import NextImage from 'next/image';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -15,7 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from '@/lib/utils';
-import type { Arrangement, OverrideRequest, Photo } from '@/types';
+import type { Arrangement, OverrideRequest, Photo, UserProfile } from '@/types';
 
 interface DayDetailsProps {
   isOpen: boolean;
@@ -23,9 +23,9 @@ interface DayDetailsProps {
   date: Date;
   arrangement: Arrangement | null;
   onUpdateArrangement: (date: Date, updatedArrangement: Arrangement) => void;
-  friends: string[];
+  friends: UserProfile[];
   seats: string[];
-  currentUser: string;
+  currentUser: UserProfile;
 }
 
 export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrangement, friends, seats, currentUser }: DayDetailsProps) {
@@ -37,10 +37,12 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
 
   if (!arrangement) return null;
 
+  const findFriendByName = (name: string) => friends.find(f => f.displayName === name);
+
   const handleAddComment = () => {
     if (commentText.trim() === '') return;
     const newComment = {
-      user: currentUser, 
+      user: currentUser.displayName, 
       text: commentText,
       timestamp: new Date().toISOString(),
     };
@@ -55,7 +57,7 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
       const reader = new FileReader();
       reader.onloadend = () => {
         const newPhoto: Photo = {
-          user: currentUser,
+          user: currentUser.displayName,
           url: reader.result as string,
           timestamp: new Date().toISOString(),
         };
@@ -78,9 +80,9 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
     }
 
     const newOverrideRequest: OverrideRequest = {
-        requester: currentUser,
+        requester: currentUser.displayName,
         newArrangement: overrideProposal,
-        approvals: [currentUser],
+        approvals: [currentUser.displayName],
         status: 'pending',
     };
     onUpdateArrangement(date, { ...arrangement, override: newOverrideRequest });
@@ -91,7 +93,7 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
 
   const handleApprove = () => {
     if (!arrangement.override) return;
-    const approver = currentUser;
+    const approver = currentUser.displayName;
     const existingApprovals = arrangement.override.approvals;
     if (existingApprovals.includes(approver)) {
       toast({description: "You've already approved this."})
@@ -122,13 +124,7 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
   };
 
   const getFriendInitial = (name: string) => name ? name.charAt(0).toUpperCase() : <User className="h-4 w-4" />;
-  const getAvatarColor = (name: string) => {
-    if (!name) return 'bg-gray-400';
-    const colors = ['bg-red-500', 'bg-green-500', 'bg-blue-500', 'bg-yellow-500', 'bg-purple-500', 'bg-pink-500'];
-    const charCodeSum = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    return colors[charCodeSum % colors.length];
-  }
-
+  
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
       <SheetContent className="sm:max-w-xl w-full flex flex-col">
@@ -147,19 +143,22 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
               <CardContent>
                 {Object.keys(arrangement.seats).length > 0 ? (
                     <ul className="space-y-4">
-                    {seats.map((seat) => (
+                    {seats.map((seat) => {
+                      const friendName = arrangement.seats[seat];
+                      const friend = findFriendByName(friendName);
+                      return (
                         <li key={seat} className="flex items-center justify-between">
                         <span className="font-medium text-muted-foreground">{seat}</span>
                         <div className="flex items-center gap-2">
                             <Avatar className="h-8 w-8">
-                                <AvatarFallback className={cn("text-white", getAvatarColor(arrangement.seats[seat]))}>
-                                    {getFriendInitial(arrangement.seats[seat])}
-                                </AvatarFallback>
+                                <AvatarImage src={friend?.photoURL || undefined} alt={friend?.displayName} />
+                                <AvatarFallback>{getFriendInitial(friendName)}</AvatarFallback>
                             </Avatar>
-                            <span className="font-semibold">{arrangement.seats[seat]}</span>
+                            <span className="font-semibold">{friendName}</span>
                         </div>
                         </li>
-                    ))}
+                      )
+                    })}
                     </ul>
                 ) : (
                     <p className="text-sm text-muted-foreground text-center py-4">No arrangement for this day.</p>
@@ -203,18 +202,21 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
                                 <span>Approvals: {arrangement.override.approvals.length} / 2</span>
                             </div>
                             <div className="flex items-center gap-1">
-                                {arrangement.override.approvals.map(f => (
-                                    <Avatar key={f} className="h-6 w-6">
-                                        <AvatarFallback className={cn("text-xs text-white", getAvatarColor(f))}>{getFriendInitial(f)}</AvatarFallback>
+                                {arrangement.override.approvals.map(friendName => {
+                                  const friend = findFriendByName(friendName);
+                                  return (
+                                    <Avatar key={friendName} className="h-6 w-6">
+                                        <AvatarImage src={friend?.photoURL || undefined} alt={friend?.displayName} />
+                                        <AvatarFallback>{getFriendInitial(friendName)}</AvatarFallback>
                                     </Avatar>
-                                ))}
+                                )})}
                             </div>
                         </div>
-                        {arrangement.override.status === 'pending' && !arrangement.override.approvals.includes(currentUser) && (
+                        {arrangement.override.status === 'pending' && !arrangement.override.approvals.includes(currentUser.displayName) && (
                             <div className="mt-4">
                                <Button className="w-full" onClick={handleApprove}>
                                  <ThumbsUp className="mr-2 h-4 w-4"/>
-                                  Approve as {currentUser}
+                                  Approve as {currentUser.displayName}
                                 </Button>
                             </div>
                         )}
@@ -245,7 +247,7 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
                                         <SelectValue placeholder="Select friend" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {friends.map(friend => <SelectItem key={friend} value={friend}>{friend}</SelectItem>)}
+                                        {friends.map(friend => <SelectItem key={friend.uid} value={friend.displayName}>{friend.displayName}</SelectItem>)}
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -264,7 +266,7 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
                  <div className="grid grid-cols-2 gap-4">
                   {arrangement.photos.map((photo, index) => (
                     <div key={index} className="relative aspect-square bg-muted rounded-lg overflow-hidden">
-                      <Image src={photo.url} alt={`Seat photo ${index + 1}`} layout="fill" objectFit="cover" />
+                      <NextImage src={photo.url} alt={`Seat photo ${index + 1}`} layout="fill" objectFit="cover" />
                        <div className="absolute bottom-0 w-full bg-black/50 text-white p-1 text-xs">
                           {photo.user} - {formatDistanceToNow(new Date(photo.timestamp), { addSuffix: true })}
                        </div>
@@ -295,17 +297,20 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
               </CardHeader>
               <CardContent className="p-0">
                 <div className="space-y-4 p-6">
-                  {arrangement.comments.map((comment, index) => (
+                  {arrangement.comments.map((comment, index) => {
+                    const friend = findFriendByName(comment.user);
+                    return (
                     <div key={index} className="flex gap-3">
                        <Avatar className="h-8 w-8">
-                         <AvatarFallback className={cn("text-white", getAvatarColor(comment.user))}>{getFriendInitial(comment.user)}</AvatarFallback>
+                         <AvatarImage src={friend?.photoURL || undefined} alt={friend?.displayName} />
+                         <AvatarFallback>{getFriendInitial(comment.user)}</AvatarFallback>
                        </Avatar>
                       <div>
                         <p className="font-semibold text-sm">{comment.user} <span className="text-xs text-muted-foreground font-normal">{formatDistanceToNow(new Date(comment.timestamp), { addSuffix: true })}</span></p>
                         <p className="text-sm text-muted-foreground">{comment.text}</p>
                       </div>
                     </div>
-                  ))}
+                  )})}
                   {arrangement.comments.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No comments yet.</p>}
                 </div>
               </CardContent>

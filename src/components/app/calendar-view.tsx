@@ -3,12 +3,13 @@
 import { useState } from 'react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, addMonths, subMonths, isSameDay, isWeekend, isToday, startOfWeek, endOfWeek, getMonth } from 'date-fns';
 import { ChevronLeft, ChevronRight, User, Star } from 'lucide-react';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import type { Arrangements } from '@/types';
+import type { Arrangements, UserProfile } from '@/types';
 import { Badge } from '../ui/badge';
-import { Avatar, AvatarFallback } from '../ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '../ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 
@@ -17,7 +18,7 @@ interface CalendarViewProps {
   onSelectDate: (date: Date) => void;
   nonWorkingDays?: Date[];
   specialEvents?: Record<string, string>;
-  friends: string[];
+  friends: UserProfile[];
 }
 
 export function CalendarView({ arrangements, onSelectDate, nonWorkingDays = [], specialEvents = {}, friends }: CalendarViewProps) {
@@ -35,18 +36,7 @@ export function CalendarView({ arrangements, onSelectDate, nonWorkingDays = [], 
   const handleNextMonth = () => setCurrentDate(addMonths(currentDate, 1));
 
   const getFriendInitial = (name: string) => name ? name.charAt(0).toUpperCase() : <User className="h-4 w-4" />;
-
-  const getAvatarColor = (name: string) => {
-    const colors = ['bg-red-500', 'bg-green-500', 'bg-blue-500', 'bg-yellow-500', 'bg-purple-500', 'bg-pink-500'];
-    if (!name) return 'bg-gray-400';
-    // Use friend index for consistent color
-    const friendIndex = friends.indexOf(name);
-    if (friendIndex !== -1) {
-      return colors[friendIndex % colors.length];
-    }
-    const charCodeSum = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    return colors[charCodeSum % colors.length];
-  }
+  const findFriendByName = (name: string) => friends.find(f => f.displayName === name);
 
 
   return (
@@ -114,20 +104,21 @@ export function CalendarView({ arrangements, onSelectDate, nonWorkingDays = [], 
                 {arrangement && Object.keys(arrangement.seats).length > 0 ? (
                   <TooltipProvider>
                     <div className="mt-1 flex-1 flex flex-col justify-end items-start space-y-1">
-                      {Object.entries(arrangement.seats).map(([seat, friend]) => (
+                      {Object.entries(arrangement.seats).map(([seat, friendName]) => {
+                        const friend = findFriendByName(friendName);
+                        return (
                         <Tooltip key={seat}>
                           <TooltipTrigger asChild>
-                            <Avatar className="h-6 w-6 border-2 border-white dark:border-card">
-                              <AvatarFallback className={cn("text-xs text-white", getAvatarColor(friend))}>
-                                {getFriendInitial(friend)}
-                              </AvatarFallback>
-                            </Avatar>
+                             <Avatar className="h-6 w-6 border-2 border-white dark:border-card">
+                                <AvatarImage src={friend?.photoURL || undefined} alt={friend?.displayName} />
+                                <AvatarFallback>{getFriendInitial(friendName)}</AvatarFallback>
+                             </Avatar>
                           </TooltipTrigger>
                           <TooltipContent>
-                            <p>{friend} - {seat}</p>
+                            <p>{friendName} - {seat}</p>
                           </TooltipContent>
                         </Tooltip>
-                      ))}
+                      )})}
                     </div>
                   </TooltipProvider>
                 ) : (
