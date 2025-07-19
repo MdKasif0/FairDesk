@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { format, subDays, isWeekend, parseISO } from 'date-fns';
+import { format, subDays, isWeekend, parseISO, addDays } from 'date-fns';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -11,6 +11,7 @@ import { Header } from '@/components/app/header';
 import { CalendarView } from '@/components/app/calendar-view';
 import { DayDetails } from '@/components/app/day-details';
 import { FairnessStats } from '@/components/app/fairness-stats';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import type { Arrangements, Arrangement, OverrideRequest } from '@/types';
 
 export default function Home() {
@@ -28,7 +29,7 @@ export default function Home() {
   useEffect(() => {
     const mockArrangements: Arrangements = {};
     const today = new Date();
-    for (let i = 1; i < 15; i++) {
+    for (let i = 1; i < 30; i++) {
       const date = subDays(today, i);
       if (!isWeekend(date)) {
         const dateStr = format(date, 'yyyy-MM-dd');
@@ -60,8 +61,11 @@ export default function Home() {
   const handleGenerate = async () => {
     setIsLoading(true);
     try {
-      const today = new Date();
-      const todayStr = format(today, 'yyyy-MM-dd');
+      let nextDay = addDays(new Date(), 1);
+      while (isWeekend(nextDay) || nonWorkingDays.includes(format(nextDay, 'yyyy-MM-dd'))) {
+        nextDay = addDays(nextDay, 1);
+      }
+      const nextDayStr = format(nextDay, 'yyyy-MM-dd');
 
       const pastArrangementsForAI = Object.entries(arrangements).map(([date, arrangement]) => ({
         date,
@@ -77,7 +81,7 @@ export default function Home() {
 
       setArrangements(prev => ({
         ...prev,
-        [todayStr]: {
+        [nextDayStr]: {
           seats: {
             [seats[0]]: result.arrangement[0],
             [seats[1]]: result.arrangement[1],
@@ -90,7 +94,7 @@ export default function Home() {
 
       toast({
         title: "Arrangement Optimized!",
-        description: "A new seating arrangement has been generated for today.",
+        description: `A new seating arrangement has been generated for ${format(nextDay, 'MMMM do')}.`,
       });
     } catch (error) {
       console.error("AI optimization failed:", error);
@@ -115,32 +119,36 @@ export default function Home() {
   const selectedArrangement = useMemo(() => {
     if (!selectedDate) return null;
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
-    return arrangements[dateStr] || null;
+    return arrangements[dateStr] || { seats: {}, comments: [], photos: [] };
   }, [selectedDate, arrangements]);
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
       <Header />
       <main className="flex-1 container mx-auto p-4 sm:p-6 lg:p-8">
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 items-start">
-          <div className="xl:col-span-2">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+          <div className="lg:col-span-2">
             <CalendarView
               arrangements={arrangements}
               onSelectDate={handleSelectDate}
               nonWorkingDays={nonWorkingDays.map(d => parseISO(d))}
             />
           </div>
-          <div className="space-y-8 xl:sticky xl:top-24">
-            <div className="bg-card p-6 rounded-lg shadow-md">
-              <h2 className="text-xl font-bold mb-4">AI Seat Optimizer</h2>
-              <p className="text-muted-foreground mb-4">
-                Click the button to get a fair and optimized seat arrangement for the next working day.
-              </p>
-              <Button onClick={handleGenerate} disabled={isLoading} className="w-full">
-                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                {isLoading ? 'Optimizing...' : "Optimize for Next Day"}
-              </Button>
-            </div>
+          <div className="space-y-8">
+            <Card>
+              <CardHeader>
+                <CardTitle>AI Seat Optimizer</CardTitle>
+                <CardDescription>
+                  Generate a fair and optimized seat arrangement for the next working day.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button onClick={handleGenerate} disabled={isLoading} className="w-full text-lg py-6 rounded-xl">
+                  {isLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
+                  {isLoading ? 'Optimizing...' : "Generate Next Arrangement"}
+                </Button>
+              </CardContent>
+            </Card>
             <FairnessStats arrangements={arrangements} friends={friends} seats={seats} />
           </div>
         </div>
