@@ -47,7 +47,9 @@ export default function Home() {
       return;
     }
 
-    const unsub = onSnapshot(doc(db, 'users', user.uid), async (userDoc) => {
+    const unsubUser = onSnapshot(doc(db, 'users', user.uid), async (userDoc) => {
+      let groupUnsub = () => {};
+
       if (userDoc.exists()) {
         const userData = userDoc.data() as UserProfile;
         if (!userData.groupId) {
@@ -55,8 +57,8 @@ export default function Home() {
           return;
         }
         
-        // Unsubscribe from previous group listener if groupId changes
-        const groupUnsub = onSnapshot(doc(db, 'groups', userData.groupId), (groupDoc) => {
+        // Subscribe to group updates in real-time
+        groupUnsub = onSnapshot(doc(db, 'groups', userData.groupId), (groupDoc) => {
             if (groupDoc.exists()) {
                 const groupData = { id: groupDoc.id, ...groupDoc.data() } as Group;
                 setGroup(groupData);
@@ -64,22 +66,22 @@ export default function Home() {
                 setArrangements(groupData.arrangements || {});
                 setIsDataLoading(false);
             } else {
-                // Handle case where group is deleted
                 toast({ variant: 'destructive', title: 'Group not found.' });
                 router.push('/group-setup');
             }
         });
 
-        return () => groupUnsub(); // Cleanup group listener
-
       } else {
-         // This case might happen if user record is deleted from Firestore but auth remains
         toast({ variant: 'destructive', title: 'User profile not found.' });
         router.push('/login');
       }
+
+      // Cleanup group listener when user listener is re-run or component unmounts
+      return () => groupUnsub(); 
     });
 
-    return () => unsub(); // Cleanup user listener
+    // Cleanup user listener on component unmount
+    return () => unsubUser();
     
   }, [user, loading, router, toast]);
 
