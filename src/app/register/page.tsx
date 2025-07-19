@@ -58,11 +58,20 @@ export default function RegisterPage() {
       router.push('/group-setup');
     } catch (error: any) {
       console.error("Registration failed:", error);
-      toast({
-        variant: 'destructive',
-        title: 'Registration Failed',
-        description: error.message || 'An unexpected error occurred.',
-      });
+      
+      if (error.code === 'auth/email-already-in-use') {
+        toast({
+            variant: 'destructive',
+            title: 'Registration Failed',
+            description: 'This email is already associated with an account. Please log in.',
+        });
+      } else {
+         toast({
+            variant: 'destructive',
+            title: 'Registration Failed',
+            description: error.message || 'An unexpected error occurred.',
+        });
+      }
     } finally {
         setIsLoading(false);
     }
