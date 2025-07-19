@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { optimizeSeatingArrangement } from '@/ai/flows/optimize-seating-arrangement';
+import { useAuth } from '@/hooks/useAuth';
+import { auth } from '@/lib/firebase';
 
 import { Header } from '@/components/app/header';
 import { CalendarView } from '@/components/app/calendar-view';
@@ -20,9 +22,10 @@ import { Label } from '@/components/ui/label';
 export default function Home() {
   const { toast } = useToast();
   const router = useRouter();
+  const { user, loading, claims } = useAuth();
 
   const [friends, setFriends] = useState<string[]>([]);
-  const [user, setUser] = useState<string | null>(null);
+  // const [user, setUser] = useState<string | null>(null);
   const [group, setGroup] = useState<{name: string, inviteCode: string, members: string[]} | null>(null);
 
   const [seats] = useState(['Driver', 'Shotgun', 'Backseat']);
@@ -32,44 +35,54 @@ export default function Home() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isClient, setIsClient] = useState(false);
-
 
   const newHolidayRef = useRef<HTMLInputElement>(null);
   const newEventDateRef = useRef<HTMLInputElement>(null);
   const newEventDescRef = useRef<HTMLInputElement>(null);
   
   useEffect(() => {
-    setIsClient(true);
-    const loggedInUser = localStorage.getItem('fairseat_user');
-    const groupDataStr = localStorage.getItem('fairseat_group');
-
-    if (!loggedInUser || !groupDataStr) {
+    if (!loading && !user) {
       router.push('/login');
-      return;
     }
-    
-    setUser(loggedInUser);
-    
-    try {
-        const groupData = JSON.parse(groupDataStr);
-        setGroup(groupData);
-        setFriends(groupData.members);
+  }, [user, loading, router]);
 
-        if (groupData.members.length < 3) {
-            toast({
-                title: 'Waiting for friends',
-                description: `Invite others with code: ${groupData.inviteCode}. You have ${groupData.members.length}/3 members.`,
-            });
+
+  useEffect(() => {
+    if (user) {
+      const groupDataStr = localStorage.getItem('fairseat_group');
+
+      if (!groupDataStr) {
+        // Redirect to a page to create or join a group
+        // For now, let's keep the mock data logic until Firestore is integrated
+        // router.push('/group-setup'); 
+      }
+      
+      try {
+        if (groupDataStr) {
+          const groupData = JSON.parse(groupDataStr);
+          setGroup(groupData);
+          setFriends(groupData.members);
+
+          if (groupData.members.length < 3) {
+              toast({
+                  title: 'Waiting for friends',
+                  description: `Invite others with code: ${groupData.inviteCode}. You have ${groupData.members.length}/3 members.`,
+              });
+          }
+        } else {
+           // TEMPORARY: Mock a group if none exists, until Firestore is added
+          const mockGroup = { name: "The Carpool Crew", inviteCode: "ABCDEF", members: ['Alice', 'Bob', 'Charlie'] };
+          setGroup(mockGroup);
+          setFriends(mockGroup.members);
         }
-        
-    } catch(e) {
-        toast({variant: 'destructive', title: 'Could not load group data'});
-        localStorage.removeItem('fairseat_group');
-        router.push('/login');
+          
+      } catch(e) {
+          toast({variant: 'destructive', title: 'Could not load group data'});
+          localStorage.removeItem('fairseat_group');
+          // router.push('/group-setup');
+      }
     }
-
-  }, [router, toast]);
+  }, [user, toast]);
 
 
   useEffect(() => {
@@ -96,9 +109,9 @@ export default function Home() {
     setArrangements(mockArrangements);
   }, [friends, seats]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('fairseat_user');
-    localStorage.removeItem('fairseat_group');
+  const handleLogout = async () => {
+    await auth.signOut();
+    localStorage.removeItem('fairseat_group'); // Will be replaced with Firestore
     router.push('/login');
     toast({ title: 'Logged out successfully.' });
   }
@@ -245,7 +258,7 @@ export default function Home() {
   const sortedNonWorkingDays = useMemo(() => nonWorkingDays.sort((a,b) => a.localeCompare(b)), [nonWorkingDays]);
   const sortedSpecialEvents = useMemo(() => Object.entries(specialEvents).sort(([a], [b]) => a.localeCompare(b)), [specialEvents]);
 
-  if (!isClient || !user || !group) {
+  if (loading || !user) {
     return (
       <div className="flex flex-col min-h-screen bg-background items-center justify-center">
         <Loader2 className="h-16 w-16 animate-spin text-primary" />
@@ -256,7 +269,7 @@ export default function Home() {
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground">
-      <Header user={user} group={group} onLogout={handleLogout} />
+      <Header user={user?.displayName || user?.email || 'User'} group={group} onLogout={handleLogout} />
       <main className="flex-1 container mx-auto p-4 sm:p-6 lg:p-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
           <div className="lg:col-span-2">
@@ -359,7 +372,7 @@ export default function Home() {
           onUpdateArrangement={handleUpdateArrangement}
           friends={friends}
           seats={seats}
-          currentUser={user}
+          currentUser={user.displayName || user.email!}
         />
       )}
     </div>

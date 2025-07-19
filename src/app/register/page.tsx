@@ -1,50 +1,54 @@
-// src/app/login/page.tsx
+// src/app/register/page.tsx
 'use client';
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Armchair, LogIn, Mail } from 'lucide-react';
-import { signInWithEmailAndPassword } from 'firebase/auth';
+import Link from 'next/link';
+import { Armchair, LogIn, UserPlus } from 'lucide-react';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
-import Link from 'next/link';
 import { auth } from '@/lib/firebase';
 
-
-export default function LoginPage() {
+export default function RegisterPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-
-  const handleLogin = async () => {
-    if (!email || !password) {
-      toast({ variant: 'destructive', title: 'Email and password required' });
+  const handleRegister = async () => {
+    if (!email || !password || !displayName) {
+      toast({ variant: 'destructive', title: 'All fields are required' });
+      return;
+    }
+     if (password.length < 6) {
+      toast({ variant: 'destructive', title: 'Password must be at least 6 characters' });
       return;
     }
     setIsLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      toast({ title: 'Logged in successfully!' });
-      router.push('/');
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      await updateProfile(userCredential.user, { displayName });
+      
+      toast({ title: 'Account created successfully!', description: "Please log in to continue." });
+      router.push('/login');
     } catch (error: any) {
-      console.error("Login failed:", error);
+      console.error("Registration failed:", error);
       toast({
         variant: 'destructive',
-        title: 'Login Failed',
+        title: 'Registration Failed',
         description: error.message || 'An unexpected error occurred.',
       });
     } finally {
         setIsLoading(false);
     }
   };
-
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-secondary p-4">
@@ -55,19 +59,31 @@ export default function LoginPage() {
             </div>
             <div>
                 <h1 className="text-3xl font-bold text-foreground">FairSeat</h1>
-                <p className="text-muted-foreground">Welcome back!</p>
+                <p className="text-muted-foreground">Create your account</p>
             </div>
         </div>
         
         <Card className="shadow-2xl">
           <CardHeader>
-            <CardTitle>Sign In</CardTitle>
+            <CardTitle>Register</CardTitle>
             <CardDescription>
-                Enter your credentials to access your dashboard.
+                Fill in the details below to create your account.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
+                <div>
+                    <Label htmlFor="displayName">Display Name</Label>
+                    <Input
+                        id="displayName"
+                        type="text"
+                        placeholder="Your Name"
+                        value={displayName}
+                        onChange={(e) => setDisplayName(e.target.value)}
+                        className="bg-input"
+                        disabled={isLoading}
+                    />
+                </div>
                 <div>
                     <Label htmlFor="email">Email</Label>
                     <Input
@@ -92,15 +108,15 @@ export default function LoginPage() {
                         disabled={isLoading}
                     />
                 </div>
-                <Button onClick={handleLogin} className="w-full" disabled={isLoading}>
-                    {isLoading ? 'Signing In...' : 'Sign In'}
-                    <LogIn className="ml-2"/>
+                <Button onClick={handleRegister} className="w-full" disabled={isLoading}>
+                    <UserPlus className="mr-2"/>
+                    {isLoading ? 'Creating Account...' : 'Register'}
                 </Button>
 
                 <p className="text-center text-sm text-muted-foreground">
-                    Don&apos;t have an account?{' '}
-                    <Link href="/register" className="font-semibold text-primary hover:underline">
-                        Register
+                    Already have an account?{' '}
+                    <Link href="/login" className="font-semibold text-primary hover:underline">
+                        Sign In
                     </Link>
                 </p>
             </div>

@@ -57,10 +57,12 @@ export function Header({ user, group, onLogout }: HeaderProps) {
                 </Tooltip>
             </TooltipProvider>
           )}
-          <Button variant="outline" size="sm" onClick={onLogout}>
-            <LogOut className="mr-2 h-4 w-4"/>
-            Logout
-          </Button>
+          {user && (
+            <Button variant="outline" size="sm" onClick={onLogout}>
+              <LogOut className="mr-2 h-4 w-4"/>
+              Logout
+            </Button>
+          )}
         </div>
       </div>
     </header>
