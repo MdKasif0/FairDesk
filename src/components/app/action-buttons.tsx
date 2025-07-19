@@ -5,10 +5,10 @@ import { GitPullRequest, Shuffle, Camera, MessageSquare, Bell } from 'lucide-rea
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
-const ActionButton = ({ icon: Icon, label, colorClass }: { icon: React.ElementType, label: string, colorClass: string }) => (
+const ActionButton = ({ icon: Icon, label, colorClass, onClick }: { icon: React.ElementType, label: string, colorClass: string, onClick?: () => void }) => (
   <Card className="shadow-md rounded-2xl">
     <CardContent className="p-3">
-      <Button variant="ghost" className="w-full justify-start h-auto p-0">
+      <Button variant="ghost" className="w-full justify-start h-auto p-0" onClick={onClick}>
         <div className={`p-2 rounded-lg ${colorClass}`}>
           <Icon className="h-5 w-5" />
         </div>

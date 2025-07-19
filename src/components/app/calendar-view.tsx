@@ -16,7 +16,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 interface CalendarViewProps {
   arrangements: Arrangements;
   onSelectDate: (date: Date) => void;
-  nonWorkingDays?: Date[];
+  nonWorkingDays?: string[];
   specialEvents?: Record<string, string>;
   friends: UserProfile[];
 }
@@ -63,7 +63,7 @@ export function CalendarView({ arrangements, onSelectDate, nonWorkingDays = [], 
             const dateStr = format(day, 'yyyy-MM-dd');
             const arrangement = arrangements[dateStr];
             const isCurrentMonth = getMonth(day) === getMonth(currentDate);
-            const isNonWorking = nonWorkingDays.some(d => isSameDay(d, day)) || isWeekend(day);
+            const isNonWorking = nonWorkingDays.includes(dateStr) || isWeekend(day);
             const isSpecialEvent = !!specialEvents[dateStr];
 
             return (
@@ -74,7 +74,7 @@ export function CalendarView({ arrangements, onSelectDate, nonWorkingDays = [], 
                   isCurrentMonth ? 'bg-card' : 'bg-secondary/50',
                   'cursor-pointer hover:bg-secondary',
                   isToday(day) && 'bg-accent/10',
-                  isNonWorking && 'bg-muted/30 text-muted-foreground/50'
+                  (isNonWorking && !isSpecialEvent) && 'bg-muted/30 text-muted-foreground/50'
                 )}
                 onClick={() => onSelectDate(day)}
               >
@@ -101,9 +101,10 @@ export function CalendarView({ arrangements, onSelectDate, nonWorkingDays = [], 
 
                 {arrangement && Object.keys(arrangement.seats).length > 0 ? (
                   <TooltipProvider>
-                    <div className="mt-1 flex-1 flex flex-col justify-end items-start space-y-1">
+                    <div className="mt-1 flex-1 flex flex-wrap -space-x-2 content-end">
                       {Object.entries(arrangement.seats).map(([seat, friendUid]) => {
                         const friend = findFriendById(friendUid);
+                        if (!friend) return null;
                         return (
                         <Tooltip key={seat}>
                           <TooltipTrigger asChild>
@@ -122,11 +123,11 @@ export function CalendarView({ arrangements, onSelectDate, nonWorkingDays = [], 
                 ) : (
                   isCurrentMonth && !isNonWorking && (
                      <div className="flex-1 flex items-center justify-center">
-                        <Badge variant="outline" className="text-xs font-normal">Unassigned</Badge>
+                        <Badge variant="outline" className="text-xs font-normal">Empty</Badge>
                      </div>
                   )
                 )}
-                 {nonWorkingDays.some(d => isSameDay(d, day)) && !isSpecialEvent && (
+                 {nonWorkingDays.includes(dateStr) && !isSpecialEvent && (
                     <div className="absolute inset-0 bg-destructive/5 opacity-50"></div>
                 )}
               </div>
@@ -137,5 +138,3 @@ export function CalendarView({ arrangements, onSelectDate, nonWorkingDays = [], 
     </Card>
   );
 }
-
-    

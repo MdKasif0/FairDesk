@@ -349,5 +349,3 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
     </Sheet>
   );
 }
-
-    

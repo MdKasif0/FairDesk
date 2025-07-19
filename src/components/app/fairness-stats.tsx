@@ -38,7 +38,9 @@ export function FairnessStats({ arrangements, friends, seats }: FairnessStatsPro
     return initialStats;
   }, [arrangements, friends, seats]);
 
-  const totalAssignments = useMemo(() => Object.values(arrangements).length, [arrangements]);
+  const totalAssignments = useMemo(() => {
+    return Object.values(arrangements).reduce((acc, curr) => acc + Object.keys(curr.seats).length, 0);
+  }, [arrangements]);
 
   if (friends.length === 0 || seats.length === 0) {
     return (
@@ -116,5 +118,3 @@ export function FairnessStats({ arrangements, friends, seats }: FairnessStatsPro
     </Card>
   );
 }
-
-    
