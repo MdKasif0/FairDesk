@@ -15,7 +15,7 @@ import {
   addDoc,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Armchair, Loader2, LogOut, Users, UserPlus } from 'lucide-react';
+import { Armchair, Loader2, LogOut, Users, UserPlus, Trash2, PlusCircle } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -34,9 +34,30 @@ export default function GroupSetupPage() {
   const { toast } = useToast();
 
   const [groupName, setGroupName] = useState('');
+  const [seats, setSeats] = useState<string[]>(['Seat 1', 'Seat 2', 'Seat 3']);
   const [inviteCode, setInviteCode] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+
+  const handleSeatChange = (index: number, value: string) => {
+    const newSeats = [...seats];
+    newSeats[index] = value;
+    setSeats(newSeats);
+  };
+
+  const addSeat = () => {
+    setSeats([...seats, `Seat ${seats.length + 1}`]);
+  };
+
+  const removeSeat = (index: number) => {
+    if (seats.length > 2) {
+      const newSeats = seats.filter((_, i) => i !== index);
+      setSeats(newSeats);
+    } else {
+        toast({ variant: 'destructive', title: 'Minimum of 2 seats required.' });
+    }
+  };
+
 
   const handleCreateGroup = async () => {
     if (!user) return;
@@ -44,6 +65,15 @@ export default function GroupSetupPage() {
       toast({ variant: 'destructive', title: 'Group name is required.' });
       return;
     }
+     if (seats.some(s => s.trim() === '')) {
+      toast({ variant: 'destructive', title: 'All seat names must be filled.' });
+      return;
+    }
+    if (new Set(seats.map(s => s.trim())).size !== seats.length) {
+        toast({ variant: 'destructive', title: 'Seat names must be unique.' });
+        return;
+    }
+
     setIsCreating(true);
     try {
       const newInviteCode = generateInviteCode();
@@ -54,6 +84,7 @@ export default function GroupSetupPage() {
         name: groupName,
         inviteCode: newInviteCode,
         members: [user.uid],
+        seats: seats.map(s => s.trim()),
         arrangements: {},
         nonWorkingDays: [],
         specialEvents: {}
@@ -88,21 +119,23 @@ export default function GroupSetupPage() {
 
       if (querySnapshot.empty) {
         toast({ variant: 'destructive', title: 'Invalid Invite Code' });
+        setIsJoining(false);
         return;
       }
 
       const groupDoc = querySnapshot.docs[0];
       const groupData = groupDoc.data();
-
-      if (groupData.members.length >= 3) {
-        toast({ variant: 'destructive', title: 'Group is full.' });
-        return;
-      }
       
       if (groupData.members.includes(user.uid)) {
         toast({ variant: 'destructive', title: "You're already in this group." });
         // redirect them anyway
          router.push('/');
+        return;
+      }
+      
+      if (groupData.members.length >= groupData.seats.length) {
+        toast({ variant: 'destructive', title: 'Group is full.', description: `This group only has ${groupData.seats.length} seats available.` });
+        setIsJoining(false);
         return;
       }
 
@@ -199,6 +232,27 @@ export default function GroupSetupPage() {
                       disabled={isCreating}
                     />
                   </div>
+                   <div>
+                    <Label>Seats</Label>
+                    <div className="space-y-2">
+                      {seats.map((seat, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <Input
+                            value={seat}
+                            onChange={(e) => handleSeatChange(index, e.target.value)}
+                            disabled={isCreating}
+                            placeholder={`Seat ${index + 1}`}
+                          />
+                          <Button variant="ghost" size="icon" onClick={() => removeSeat(index)} disabled={isCreating || seats.length <= 2}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                    <Button variant="outline" size="sm" className="mt-2" onClick={addSeat} disabled={isCreating}>
+                      <PlusCircle className="mr-2 h-4 w-4" /> Add Seat
+                    </Button>
+                  </div>
                   <Button onClick={handleCreateGroup} className="w-full" disabled={isCreating}>
                     {isCreating ? <Loader2 className="mr-2" /> : <Users className="mr-2" />}
                     {isCreating ? 'Creating...' : 'Create Group'}
@@ -218,5 +272,3 @@ export default function GroupSetupPage() {
     </div>
   );
 }
-
-    

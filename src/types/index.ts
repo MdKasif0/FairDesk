@@ -41,6 +41,7 @@ export interface Group {
   name: string;
   members: string[]; // array of user uids
   inviteCode: string;
+  seats: string[]; // array of seat names
   arrangements: Arrangements;
   nonWorkingDays: string[];
   specialEvents: Record<string, string>;

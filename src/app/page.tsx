@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { format, subDays, isWeekend, parseISO, addDays, isValid, parse } from 'date-fns';
-import { Loader2, PlusCircle, Trash2, CalendarPlus } from 'lucide-react';
+import { Loader2, PlusCircle, Trash2, CalendarPlus, Users } from 'lucide-react';
 import { doc, getDoc, onSnapshot, writeBatch } from 'firebase/firestore';
 
 import { Button } from '@/components/ui/button';
@@ -29,8 +29,7 @@ export default function Home() {
 
   const [group, setGroup] = useState<Group | null>(null);
   const [friends, setFriends] = useState<UserProfile[]>([]);
-  const [seats] = useState(['Driver', 'Shotgun', 'Backseat']);
-
+  
   const [arrangements, setArrangements] = useState<Arrangements>({});
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
@@ -45,6 +44,8 @@ export default function Home() {
   const newHolidayRef = useRef<HTMLInputElement>(null);
   const newEventDateRef = useRef<HTMLInputElement>(null);
   const newEventDescRef = useRef<HTMLInputElement>(null);
+
+  const seats = useMemo(() => group?.seats || [], [group]);
 
   useEffect(() => {
     if (loading) return;
@@ -121,12 +122,17 @@ export default function Home() {
     setSelectedDate(null);
   };
 
+  const isGroupReady = useMemo(() => {
+    if (!group) return false;
+    return friends.length === group.seats.length;
+  }, [group, friends]);
+
   const handleGenerate = async () => {
-    if (!group || friends.length < 3) {
+    if (!group || !isGroupReady) {
       toast({
         variant: 'destructive',
-        title: 'Group Not Full',
-        description: 'You need 3 friends in the group to generate arrangements.',
+        title: 'Group Not Ready',
+        description: 'You need all seats to be filled by friends to generate arrangements.',
       });
       return;
     }
@@ -139,6 +145,7 @@ export default function Home() {
 
       const result = await optimizeSeatingArrangement({
         friends: friends.map(f => f.displayName),
+        seats: seats,
         nonWorkingDays: group.nonWorkingDays || [],
         specialEvents: group.specialEvents || {},
         pastArrangements: pastArrangementsForAI,
@@ -164,11 +171,10 @@ export default function Home() {
       }
 
       const newArrangement: Arrangement = {
-        seats: {
-          [seats[0]]: result.arrangement[0],
-          [seats[1]]: result.arrangement[1],
-          [seats[2]]: result.arrangement[2],
-        },
+        seats: seats.reduce((acc, seat, index) => {
+          acc[seat] = result.arrangement[index];
+          return acc;
+        }, {} as Record<string, string>),
         comments: [{ user: 'AI Assistant', text: result.reasoning, timestamp: new Date().toISOString() }],
         photos: [],
       };
@@ -292,7 +298,7 @@ export default function Home() {
   }
 
   const handleSetInitialArrangement = async () => {
-    if (!group) return;
+    if (!group || !isGroupReady) return;
     // Validation
     if (!initialArrangementDate) {
       toast({ variant: 'destructive', title: 'Please select a date.' });
@@ -303,12 +309,12 @@ export default function Home() {
       toast({ variant: 'destructive', title: 'Invalid date format.' });
       return;
     }
-    if (Object.keys(initialArrangement).length !== 3) {
-      toast({ variant: 'destructive', title: 'Please assign all three seats.' });
+    if (Object.keys(initialArrangement).length !== seats.length) {
+      toast({ variant: 'destructive', title: `Please assign all ${seats.length} seats.` });
       return;
     }
     const assignedFriends = Object.values(initialArrangement);
-    if (new Set(assignedFriends).size !== 3) {
+    if (new Set(assignedFriends).size !== friends.length) {
       toast({ variant: 'destructive', title: 'Each friend must be assigned to a unique seat.' });
       return;
     }
@@ -353,7 +359,7 @@ export default function Home() {
   
   const currentUserProfile = useMemo(() => friends.find(f => f.uid === user?.uid), [friends, user]);
   const isCreator = useMemo(() => user?.uid === group?.members[0], [user, group]);
-  const showInitialSetup = useMemo(() => isCreator && friends.length === 3 && Object.keys(arrangements).length === 0, [isCreator, friends, arrangements]);
+  const showInitialSetup = useMemo(() => isCreator && isGroupReady && Object.keys(arrangements).length === 0, [isCreator, isGroupReady, arrangements]);
 
 
   const sortedNonWorkingDays = useMemo(() => (group?.nonWorkingDays || []).sort((a,b) => a.localeCompare(b)), [group]);
@@ -390,7 +396,7 @@ export default function Home() {
                       <div key={seat}>
                         <Label>{seat}</Label>
                         <Select
-                          onValueChange={(friend) => setInitialArrangement(p => ({...p, [seat]: friend}))}
+                          onValueChange={(friendDisplayName) => setInitialArrangement(p => ({...p, [seat]: friendDisplayName}))}
                           value={initialArrangement[seat] || ''}
                         >
                           <SelectTrigger>
@@ -431,13 +437,13 @@ export default function Home() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button onClick={handleGenerate} disabled={isAiLoading || friends.length < 3 || showInitialSetup} className="w-full text-lg py-6 rounded-xl">
+                <Button onClick={handleGenerate} disabled={isAiLoading || !isGroupReady || showInitialSetup} className="w-full text-lg py-6 rounded-xl">
                   {isAiLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
                   {isAiLoading ? 'Optimizing...' : "Generate Next Arrangement"}
                 </Button>
-                {friends.length < 3 && (
+                {!isGroupReady && (
                   <p className="text-xs text-center mt-2 text-destructive">
-                    You need 3 members in your group to generate seats. Your group has {friends.length}.
+                    You need {group.seats.length} members in your group to generate seats. Your group has {friends.length}.
                   </p>
                 )}
                  {showInitialSetup && (
@@ -519,6 +525,7 @@ export default function Home() {
           friends={friends}
           seats={seats}
           currentUser={currentUserProfile}
+          groupSize={friends.length}
         />
       )}
     </div>

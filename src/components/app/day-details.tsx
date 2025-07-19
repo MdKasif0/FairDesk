@@ -26,9 +26,10 @@ interface DayDetailsProps {
   friends: UserProfile[];
   seats: string[];
   currentUser: UserProfile;
+  groupSize: number;
 }
 
-export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrangement, friends, seats, currentUser }: DayDetailsProps) {
+export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrangement, friends, seats, currentUser, groupSize }: DayDetailsProps) {
   const { toast } = useToast();
   const [commentText, setCommentText] = useState('');
   const [showOverrideForm, setShowOverrideForm] = useState(false);
@@ -36,6 +37,8 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
   const photoInputRef = useRef<HTMLInputElement>(null);
 
   if (!arrangement) return null;
+
+  const approvalThreshold = Math.floor(groupSize / 2) + 1;
 
   const findFriendByName = (name: string) => friends.find(f => f.displayName === name);
 
@@ -74,7 +77,7 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
         return;
     }
      const newValues = Object.values(overrideProposal);
-    if (new Set(newValues).size !== seats.length) {
+    if (new Set(newValues).size !== friends.length) {
         toast({ variant: 'destructive', title: 'Invalid Proposal', description: 'Each friend must be assigned to exactly one seat.' });
         return;
     }
@@ -89,7 +92,7 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
     onUpdateArrangement(date, { ...arrangement, override: newOverrideRequest, seats: arrangement.seats || {} });
     setShowOverrideForm(false);
     setOverrideProposal({});
-    toast({ title: 'Override proposal submitted!', description: 'Waiting for 1 more approval.' });
+    toast({ title: 'Override proposal submitted!', description: `Waiting for ${approvalThreshold - 1} more approval(s).` });
   }
 
   const handleApprove = () => {
@@ -105,12 +108,12 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
     let newStatus = arrangement.override.status;
     let newSeats = arrangement.seats;
 
-    if (newApprovals.length >= 2) {
+    if (newApprovals.length >= approvalThreshold) {
         newStatus = 'approved';
         newSeats = arrangement.override.newArrangement;
         toast({ title: 'Override Approved!', description: 'The seating arrangement has been updated.' });
     } else {
-        toast({ title: 'Approval recorded!', description: `1 more approval needed.` });
+        toast({ title: 'Approval recorded!', description: `${approvalThreshold - newApprovals.length} more approval(s) needed.` });
     }
 
     onUpdateArrangement(date, {
@@ -203,7 +206,7 @@ export function DayDetails({ isOpen, onClose, date, arrangement, onUpdateArrange
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2 text-sm">
                                 <ThumbsUp className="h-4 w-4"/>
-                                <span>Approvals: {arrangement.override.approvals.length} / 2</span>
+                                <span>Approvals: {arrangement.override.approvals.length} / {approvalThreshold}</span>
                             </div>
                             <div className="flex items-center gap-1">
                                 {arrangement.override.approvals.map(friendName => {

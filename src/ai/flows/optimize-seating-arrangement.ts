@@ -2,7 +2,7 @@
 'use server';
 
 /**
- * @fileOverview AI-powered flow to optimize seating arrangements, considering non-working days, special events, and past arrangements.
+ * @fileOverview AI-powered flow to optimize seating arrangements for a dynamic number of friends and seats.
  *
  * - optimizeSeatingArrangement - The main function to trigger the seating optimization.
  * - OptimizeSeatingArrangementInput - Input type for optimizeSeatingArrangement.
@@ -18,15 +18,16 @@ const OptimizeSeatingArrangementInputSchema = z.object({
   specialEvents: z.record(z.string()).describe('Object mapping dates (YYYY-MM-DD) to descriptions of special events.'),
   pastArrangements: z.array(z.object({
     date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).describe('Date of the seating arrangement (YYYY-MM-DD).'),
-    seats: z.array(z.string()).length(3).describe('Array of seat assignments for that date, should have 3 values.'),
+    seats: z.array(z.string()).describe('Array of seat assignments for that date.'),
   })).describe('History of past seating arrangements.'),
-  friends: z.array(z.string()).length(3).describe('Array of friend names.').default(['Alice', 'Bob', 'Charlie']),
+  friends: z.array(z.string()).describe('Array of friend names.'),
+  seats: z.array(z.string()).describe('Array of available seat names.'),
 });
 
 export type OptimizeSeatingArrangementInput = z.infer<typeof OptimizeSeatingArrangementInputSchema>;
 
 const OptimizeSeatingArrangementOutputSchema = z.object({
-  arrangement: z.array(z.string()).length(3).describe('Optimized seating arrangement for the next working day.'),
+  arrangement: z.array(z.string()).describe('Optimized seating arrangement for the next working day. The order of names should correspond to the order of seats provided in the input.'),
   reasoning: z.string().describe('Explanation of why the AI chose this seating arrangement.'),
   nextWorkingDay: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().describe('The next working day for which the arrangement is suggested.'),
 });
@@ -45,17 +46,20 @@ const optimizeSeatingArrangementPrompt = ai.definePrompt({
       latestArrangement: z.array(z.string()).optional().describe('The most recent seating arrangement.'),
   })},
   output: {schema: OptimizeSeatingArrangementOutputSchema},
-  prompt: `You are an AI assistant specialized in creating fair, rotating seating arrangements for three friends: {{{friends}}}.
+  prompt: `You are an AI assistant specialized in creating fair, rotating seating arrangements for a group of friends.
+
+There are {{friends.length}} friends: {{{friends}}}.
+There are {{seats.length}} seats: {{{seats}}}.
 
 Your task is to determine the seating arrangement for the next working day, which is {{{nextWorkingDay}}}.
 
 Key factors to consider:
-- **Rotation and Fairness**: The primary goal is to rotate the friends through the seats fairly. The last known seating arrangement was: {{{latestArrangement}}}. The new arrangement should be the next logical rotation. For example, if the last arrangement was [Alice, Bob, Charlie], the next should be [Bob, Charlie, Alice].
+- **Rotation and Fairness**: The primary goal is to rotate the friends through the seats fairly. The last known seating arrangement was: {{{latestArrangement}}}. The new arrangement should be the next logical rotation. For example, if the last arrangement was [Alice, Bob, Charlie], the next should be [Bob, Charlie, Alice]. The number of friends and seats is dynamic.
 - **Continuity**: The rotation should pick up from the most recent arrangement, ignoring any non-working days in between.
 - **Past History**: Use the full history of past arrangements to ensure long-term fairness. Past arrangements: {{{pastArrangements}}}.
 - **Special Events**: Check if the next working day has a special event: {{{specialEvents}}}. If an event description implies a seating preference, consider it. Otherwise, follow the standard rotation.
 
-Based on these rules, determine the optimal seating arrangement for {{{nextWorkingDay}}}. Provide the arrangement and a concise reasoning for your choice. The seating arrangement must be an array of the three friend names: {{{friends}}}.`,
+Based on these rules, determine the optimal seating arrangement for {{{nextWorkingDay}}}. Provide the arrangement and a concise reasoning for your choice. The seating arrangement must be an array of friend names, with the order corresponding to the seats: {{{seats}}}.`,
 });
 
 const optimizeSeatingArrangementFlow = ai.defineFlow(
@@ -84,7 +88,6 @@ const optimizeSeatingArrangementFlow = ai.defineFlow(
             currentDate = parseISO(lastValidArrangement.date);
         }
     }
-
 
     // Find the next working day
     let nextDay = addDays(currentDate, 1);

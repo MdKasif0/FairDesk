@@ -1,4 +1,4 @@
-import { Armchair, LogOut, Copy, User } from 'lucide-react';
+import { Armchair, LogOut, Copy, User, Users } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -30,6 +30,8 @@ export function Header({ user, group, onLogout }: HeaderProps) {
     }
   }
 
+  const isGroupFull = group ? group.members.length >= group.seats.length : false;
+
   return (
     <header className="bg-background border-b sticky top-0 z-50">
       <div className="container mx-auto flex items-center justify-between p-4">
@@ -45,12 +47,13 @@ export function Header({ user, group, onLogout }: HeaderProps) {
           </div>
         </div>
         <div className="flex items-center gap-4">
-          {group && group.members.length < 3 && (
+          {group && !isGroupFull && (
             <TooltipProvider>
                 <Tooltip>
                     <TooltipTrigger asChild>
                          <Badge variant="secondary" className="cursor-pointer" onClick={handleCopyInviteCode}>
-                            Invite Code: {group.inviteCode}
+                            <Users className="h-3 w-3 mr-2"/>
+                            {group.members.length} / {group.seats.length} Members | Invite Code: {group.inviteCode}
                             <Copy className="h-3 w-3 ml-2"/>
                          </Badge>
                     </TooltipTrigger>
