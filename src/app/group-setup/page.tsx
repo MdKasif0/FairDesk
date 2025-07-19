@@ -7,9 +7,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import {
   collection,
-  query,
-  where,
-  getDocs,
   writeBatch,
   doc,
 } from 'firebase/firestore';
@@ -22,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { auth } from '@/lib/firebase';
+import { joinGroup } from '@/ai/flows/join-group';
 
 function generateInviteCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -78,10 +76,8 @@ export default function GroupSetupPage() {
       const newInviteCode = generateInviteCode();
       const batch = writeBatch(db);
 
-      // 1. Create a new group document reference (don't write it yet)
       const newGroupRef = doc(collection(db, 'groups'));
       
-      // 2. Set the data for the new group in the batch
       batch.set(newGroupRef, {
         name: groupName,
         inviteCode: newInviteCode,
@@ -92,11 +88,9 @@ export default function GroupSetupPage() {
         specialEvents: {}
       });
 
-      // 3. Update the user's document with the new group ID in the same batch
       const userRef = doc(db, 'users', user.uid);
       batch.update(userRef, { groupId: newGroupRef.id });
 
-      // 4. Commit the atomic batch
       await batch.commit();
 
       toast({ title: 'Group created!', description: 'Your dashboard is ready.' });
@@ -117,49 +111,21 @@ export default function GroupSetupPage() {
     }
     setIsJoining(true);
     try {
-      const q = query(collection(db, 'groups'), where('inviteCode', '==', inviteCode.trim()));
-      const querySnapshot = await getDocs(q);
-
-      if (querySnapshot.empty) {
-        toast({ variant: 'destructive', title: 'Invalid Invite Code' });
-        setIsJoining(false);
-        return;
-      }
-
-      const groupDoc = querySnapshot.docs[0];
-      const groupData = groupDoc.data();
-      
-      if (groupData.members.includes(user.uid)) {
-        toast({ variant: 'destructive', title: "You're already in this group." });
-        // redirect them anyway
-         router.push('/');
-        return;
-      }
-      
-      if (groupData.members.length >= groupData.seats.length) {
-        toast({ variant: 'destructive', title: 'Group is full.', description: `This group only has ${groupData.seats.length} seats available.` });
-        setIsJoining(false);
-        return;
-      }
-
-      const batch = writeBatch(db);
-
-      // 1. Add user to group's member list
-      batch.update(groupDoc.ref, {
-        members: [...groupData.members, user.uid],
+      const result = await joinGroup({
+        inviteCode: inviteCode.trim(),
+        user: { uid: user.uid },
       });
 
-      // 2. Update user's document with group ID
-      const userRef = doc(db, 'users', user.uid);
-      batch.update(userRef, { groupId: groupDoc.id });
+      if (result.success) {
+        toast({ title: 'Joined group successfully!', description: 'Welcome!' });
+        router.push('/');
+      } else {
+        toast({ variant: 'destructive', title: 'Could not join group.', description: result.message });
+      }
 
-      await batch.commit();
-
-      toast({ title: 'Joined group successfully!', description: 'Welcome!' });
-      router.push('/');
     } catch (error) {
       console.error('Error joining group:', error);
-      toast({ variant: 'destructive', title: 'Could not join group.' });
+      toast({ variant: 'destructive', title: 'An unexpected error occurred.' });
     } finally {
       setIsJoining(false);
     }
