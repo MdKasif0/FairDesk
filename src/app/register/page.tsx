@@ -4,15 +4,17 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Armchair, LogIn, UserPlus } from 'lucide-react';
+import { Armchair, UserPlus } from 'lucide-react';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Label } from '@/components/ui/label';
-import { auth } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -33,11 +35,24 @@ export default function RegisterPage() {
     }
     setIsLoading(true);
     try {
+      // 1. Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      await updateProfile(userCredential.user, { displayName });
+      const user = userCredential.user;
+
+      // 2. Update Auth profile
+      await updateProfile(user, { displayName });
       
-      toast({ title: 'Account created successfully!', description: "Please log in to continue." });
-      router.push('/login');
+      // 3. Create user document in Firestore
+      await setDoc(doc(db, 'users', user.uid), {
+        uid: user.uid,
+        displayName: displayName,
+        email: user.email,
+        groupId: null, // Initially, user is not in a group
+      });
+
+
+      toast({ title: 'Account created successfully!', description: "Redirecting you to group setup..." });
+      router.push('/group-setup');
     } catch (error: any) {
       console.error("Registration failed:", error);
       toast({
@@ -69,7 +84,7 @@ export default function RegisterPage() {
             <CardDescription>
                 Fill in the details below to create your account.
             </CardDescription>
-          </CardHeader>
+          </Header>
           <CardContent>
             <div className="space-y-4">
                 <div>
@@ -126,3 +141,5 @@ export default function RegisterPage() {
     </div>
   );
 }
+
+    

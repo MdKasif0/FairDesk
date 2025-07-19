@@ -3,115 +3,102 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { format, subDays, isWeekend, parseISO, addDays, isValid, parse } from 'date-fns';
-import { Loader2, PlusCircle, Trash2, LogOut } from 'lucide-react';
+import { Loader2, PlusCircle, Trash2 } from 'lucide-react';
+import { doc, getDoc, onSnapshot, writeBatch } from 'firebase/firestore';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { optimizeSeatingArrangement } from '@/ai/flows/optimize-seating-arrangement';
 import { useAuth } from '@/hooks/useAuth';
-import { auth } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 
 import { Header } from '@/components/app/header';
 import { CalendarView } from '@/components/app/calendar-view';
 import { DayDetails } from '@/components/app/day-details';
 import { FairnessStats } from '@/components/app/fairness-stats';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import type { Arrangements, Arrangement } from '@/types';
+import type { Arrangements, Arrangement, Group, UserProfile, Comment, Photo, OverrideRequest } from '@/types';
 import { Label } from '@/components/ui/label';
 
 export default function Home() {
   const { toast } = useToast();
   const router = useRouter();
-  const { user, loading, claims } = useAuth();
+  const { user, loading } = useAuth();
 
-  const [friends, setFriends] = useState<string[]>([]);
-  // const [user, setUser] = useState<string | null>(null);
-  const [group, setGroup] = useState<{name: string, inviteCode: string, members: string[]} | null>(null);
-
+  const [group, setGroup] = useState<Group | null>(null);
+  const [friends, setFriends] = useState<UserProfile[]>([]);
   const [seats] = useState(['Driver', 'Shotgun', 'Backseat']);
+
   const [arrangements, setArrangements] = useState<Arrangements>({});
-  const [nonWorkingDays, setNonWorkingDays] = useState<string[]>(['2024-12-25']);
-  const [specialEvents, setSpecialEvents] = useState<Record<string, string>>({ '2024-11-28': 'Thanksgiving Day Trip' });
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isAiLoading, setIsAiLoading] = useState(false);
+  const [isDataLoading, setIsDataLoading] = useState(true);
 
   const newHolidayRef = useRef<HTMLInputElement>(null);
   const newEventDateRef = useRef<HTMLInputElement>(null);
   const newEventDescRef = useRef<HTMLInputElement>(null);
-  
+
   useEffect(() => {
-    if (!loading && !user) {
+    if (loading) return;
+    if (!user) {
       router.push('/login');
+      return;
     }
-  }, [user, loading, router]);
 
-
-  useEffect(() => {
-    if (user) {
-      const groupDataStr = localStorage.getItem('fairseat_group');
-
-      if (!groupDataStr) {
-        // Redirect to a page to create or join a group
-        // For now, let's keep the mock data logic until Firestore is integrated
-        // router.push('/group-setup'); 
-      }
-      
-      try {
-        if (groupDataStr) {
-          const groupData = JSON.parse(groupDataStr);
-          setGroup(groupData);
-          setFriends(groupData.members);
-
-          if (groupData.members.length < 3) {
-              toast({
-                  title: 'Waiting for friends',
-                  description: `Invite others with code: ${groupData.inviteCode}. You have ${groupData.members.length}/3 members.`,
-              });
-          }
-        } else {
-           // TEMPORARY: Mock a group if none exists, until Firestore is added
-          const mockGroup = { name: "The Carpool Crew", inviteCode: "ABCDEF", members: ['Alice', 'Bob', 'Charlie'] };
-          setGroup(mockGroup);
-          setFriends(mockGroup.members);
+    const unsub = onSnapshot(doc(db, 'users', user.uid), async (userDoc) => {
+      if (userDoc.exists()) {
+        const userData = userDoc.data() as UserProfile;
+        if (!userData.groupId) {
+          router.push('/group-setup');
+          return;
         }
-          
-      } catch(e) {
-          toast({variant: 'destructive', title: 'Could not load group data'});
-          localStorage.removeItem('fairseat_group');
-          // router.push('/group-setup');
+        
+        // Unsubscribe from previous group listener if groupId changes
+        const groupUnsub = onSnapshot(doc(db, 'groups', userData.groupId), (groupDoc) => {
+            if (groupDoc.exists()) {
+                const groupData = { id: groupDoc.id, ...groupDoc.data() } as Group;
+                setGroup(groupData);
+                fetchFriends(groupData.members);
+                setArrangements(groupData.arrangements || {});
+                setIsDataLoading(false);
+            } else {
+                // Handle case where group is deleted
+                toast({ variant: 'destructive', title: 'Group not found.' });
+                router.push('/group-setup');
+            }
+        });
+
+        return () => groupUnsub(); // Cleanup group listener
+
+      } else {
+         // This case might happen if user record is deleted from Firestore but auth remains
+        toast({ variant: 'destructive', title: 'User profile not found.' });
+        router.push('/login');
       }
-    }
-  }, [user, toast]);
+    });
 
+    return () => unsub(); // Cleanup user listener
+    
+  }, [user, loading, router, toast]);
 
-  useEffect(() => {
-    if (friends.length === 0) return;
-
-    const mockArrangements: Arrangements = {};
-    const today = new Date();
-    for (let i = 1; i < 30; i++) {
-      const date = subDays(today, i);
-      if (!isWeekend(date)) {
-        const dateStr = format(date, 'yyyy-MM-dd');
-        const arrangement: Arrangement = {
-          seats: {
-            [seats[0]]: friends[i % friends.length],
-            [seats[1]]: friends[(i + 1) % friends.length],
-            [seats[2]]: friends[(i + 2) % friends.length],
-          },
-          comments: [],
-          photos: [],
-        };
-        mockArrangements[dateStr] = arrangement;
+  const fetchFriends = async (memberIds: string[]) => {
+      if (memberIds.length === 0) {
+        setFriends([]);
+        return;
       }
-    }
-    setArrangements(mockArrangements);
-  }, [friends, seats]);
+      const friendProfiles = await Promise.all(
+          memberIds.map(async (id) => {
+              const userDoc = await getDoc(doc(db, 'users', id));
+              return userDoc.exists() ? { id: userDoc.id, ...userDoc.data() } as UserProfile : null;
+          })
+      );
+      setFriends(friendProfiles.filter(p => p !== null) as UserProfile[]);
+  }
 
   const handleLogout = async () => {
     await auth.signOut();
-    localStorage.removeItem('fairseat_group'); // Will be replaced with Firestore
     router.push('/login');
     toast({ title: 'Logged out successfully.' });
   }
@@ -127,7 +114,7 @@ export default function Home() {
   };
 
   const handleGenerate = async () => {
-    if (friends.length < 3) {
+    if (!group || friends.length < 3) {
       toast({
         variant: 'destructive',
         title: 'Group Not Full',
@@ -135,7 +122,7 @@ export default function Home() {
       });
       return;
     }
-    setIsLoading(true);
+    setIsAiLoading(true);
     try {
       const pastArrangementsForAI = Object.entries(arrangements).map(([date, arrangement]) => ({
         date,
@@ -143,9 +130,9 @@ export default function Home() {
       }));
 
       const result = await optimizeSeatingArrangement({
-        friends,
-        nonWorkingDays,
-        specialEvents,
+        friends: friends.map(f => f.displayName),
+        nonWorkingDays: group.nonWorkingDays || [],
+        specialEvents: group.specialEvents || {},
         pastArrangements: pastArrangementsForAI,
       });
 
@@ -168,18 +155,22 @@ export default function Home() {
         return;
       }
 
-      setArrangements(prev => ({
-        ...prev,
-        [result.nextWorkingDay!]: {
-          seats: {
-            [seats[0]]: result.arrangement[0],
-            [seats[1]]: result.arrangement[1],
-            [seats[2]]: result.arrangement[2],
-          },
-          comments: [{ user: 'AI Assistant', text: result.reasoning, timestamp: new Date().toISOString() }],
-          photos: [],
+      const newArrangement: Arrangement = {
+        seats: {
+          [seats[0]]: result.arrangement[0],
+          [seats[1]]: result.arrangement[1],
+          [seats[2]]: result.arrangement[2],
         },
-      }));
+        comments: [{ user: 'AI Assistant', text: result.reasoning, timestamp: new Date().toISOString() }],
+        photos: [],
+      };
+
+      const groupRef = doc(db, 'groups', group.id);
+      const batch = writeBatch(db);
+      batch.update(groupRef, {
+        [`arrangements.${result.nextWorkingDay}`]: newArrangement
+      });
+      await batch.commit();
 
       toast({
         title: "Arrangement Optimized!",
@@ -193,46 +184,70 @@ export default function Home() {
         description: "Could not generate arrangement. Please check console.",
       });
     } finally {
-      setIsLoading(false);
+      setIsAiLoading(false);
     }
   };
 
-  const handleUpdateArrangement = (date: Date, updatedArrangement: Arrangement) => {
+  const handleUpdateArrangement = async (date: Date, updatedArrangement: Arrangement) => {
+    if (!group) return;
     const dateStr = format(date, 'yyyy-MM-dd');
-    setArrangements(prev => ({
-      ...prev,
-      [dateStr]: updatedArrangement,
-    }));
+    
+    const groupRef = doc(db, 'groups', group.id);
+    try {
+      const batch = writeBatch(db);
+      batch.update(groupRef, {
+        [`arrangements.${dateStr}`]: updatedArrangement
+      });
+      await batch.commit();
+    } catch (error) {
+      console.error("Error updating arrangement:", error);
+      toast({ variant: 'destructive', title: 'Update failed', description: 'Could not save changes.' });
+    }
   };
   
-  const handleAddHoliday = () => {
-    if (newHolidayRef.current?.value) {
+  const handleAddHoliday = async () => {
+    if (newHolidayRef.current?.value && group) {
       const newDate = parse(newHolidayRef.current.value, 'yyyy-MM-dd', new Date());
       if (isValid(newDate)) {
         const dateStr = format(newDate, 'yyyy-MM-dd');
-        if (!nonWorkingDays.includes(dateStr)) {
-          setNonWorkingDays([...nonWorkingDays, dateStr]);
-          newHolidayRef.current.value = '';
-          toast({title: "Holiday added", description: `${format(newDate, 'MMMM do, yyyy')} is now a non-working day.`});
-        }
+        const updatedHolidays = [...(group.nonWorkingDays || []), dateStr];
+        
+        const groupRef = doc(db, 'groups', group.id);
+        const batch = writeBatch(db);
+        batch.update(groupRef, { nonWorkingDays: updatedHolidays });
+        await batch.commit();
+
+        newHolidayRef.current.value = '';
+        toast({title: "Holiday added", description: `${format(newDate, 'MMMM do, yyyy')} is now a non-working day.`});
       } else {
         toast({variant: 'destructive', title: "Invalid Date", description: "Please enter a valid date for the holiday."});
       }
     }
   };
 
-  const handleRemoveHoliday = (dateToRemove: string) => {
-    setNonWorkingDays(nonWorkingDays.filter(d => d !== dateToRemove));
+  const handleRemoveHoliday = async (dateToRemove: string) => {
+    if (!group) return;
+    const updatedHolidays = (group.nonWorkingDays || []).filter(d => d !== dateToRemove);
+    const groupRef = doc(db, 'groups', group.id);
+    const batch = writeBatch(db);
+    batch.update(groupRef, { nonWorkingDays: updatedHolidays });
+    await batch.commit();
     toast({title: "Holiday removed"});
   };
   
-  const handleAddEvent = () => {
-    if (newEventDateRef.current?.value && newEventDescRef.current?.value) {
+  const handleAddEvent = async () => {
+    if (newEventDateRef.current?.value && newEventDescRef.current?.value && group) {
       const newDate = parse(newEventDateRef.current.value, 'yyyy-MM-dd', new Date());
       const newDesc = newEventDescRef.current.value;
       if (isValid(newDate) && newDesc.trim() !== '') {
         const dateStr = format(newDate, 'yyyy-MM-dd');
-        setSpecialEvents({...specialEvents, [dateStr]: newDesc });
+        const updatedEvents = {...(group.specialEvents || {}), [dateStr]: newDesc };
+
+        const groupRef = doc(db, 'groups', group.id);
+        const batch = writeBatch(db);
+        batch.update(groupRef, { specialEvents: updatedEvents });
+        await batch.commit();
+
         newEventDateRef.current.value = '';
         newEventDescRef.current.value = '';
         toast({title: "Event added", description: `Added "${newDesc}" on ${format(newDate, 'MMMM do, yyyy')}.`});
@@ -242,10 +257,16 @@ export default function Home() {
     }
   }
 
-  const handleRemoveEvent = (dateToRemove: string) => {
-    const newEvents = {...specialEvents};
+  const handleRemoveEvent = async (dateToRemove: string) => {
+    if (!group) return;
+    const newEvents = {...(group.specialEvents || {})};
     delete newEvents[dateToRemove];
-    setSpecialEvents(newEvents);
+    
+    const groupRef = doc(db, 'groups', group.id);
+    const batch = writeBatch(db);
+    batch.update(groupRef, { specialEvents: newEvents });
+    await batch.commit();
+
     toast({title: "Event removed"});
   }
 
@@ -255,10 +276,10 @@ export default function Home() {
     return arrangements[dateStr] || { seats: {}, comments: [], photos: [] };
   }, [selectedDate, arrangements]);
 
-  const sortedNonWorkingDays = useMemo(() => nonWorkingDays.sort((a,b) => a.localeCompare(b)), [nonWorkingDays]);
-  const sortedSpecialEvents = useMemo(() => Object.entries(specialEvents).sort(([a], [b]) => a.localeCompare(b)), [specialEvents]);
+  const sortedNonWorkingDays = useMemo(() => (group?.nonWorkingDays || []).sort((a,b) => a.localeCompare(b)), [group]);
+  const sortedSpecialEvents = useMemo(() => Object.entries(group?.specialEvents || {}).sort(([a], [b]) => a.localeCompare(b)), [group]);
 
-  if (loading || !user) {
+  if (loading || isDataLoading || !user || !group) {
     return (
       <div className="flex flex-col min-h-screen bg-background items-center justify-center">
         <Loader2 className="h-16 w-16 animate-spin text-primary" />
@@ -276,9 +297,9 @@ export default function Home() {
             <CalendarView
               arrangements={arrangements}
               onSelectDate={handleSelectDate}
-              nonWorkingDays={nonWorkingDays.map(d => parseISO(d))}
-              specialEvents={specialEvents}
-              friends={friends}
+              nonWorkingDays={(group.nonWorkingDays || []).map(d => parseISO(d))}
+              specialEvents={group.specialEvents || {}}
+              friends={friends.map(f => f.displayName)}
             />
           </div>
           <div className="space-y-8">
@@ -290,13 +311,13 @@ export default function Home() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button onClick={handleGenerate} disabled={isLoading || friends.length < 3} className="w-full text-lg py-6 rounded-xl">
-                  {isLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
-                  {isLoading ? 'Optimizing...' : "Generate Next Arrangement"}
+                <Button onClick={handleGenerate} disabled={isAiLoading || friends.length < 3} className="w-full text-lg py-6 rounded-xl">
+                  {isAiLoading ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : null}
+                  {isAiLoading ? 'Optimizing...' : "Generate Next Arrangement"}
                 </Button>
                 {friends.length < 3 && (
                   <p className="text-xs text-center mt-2 text-destructive">
-                    You need 3 members in your group to generate seats.
+                    You need 3 members in your group to generate seats. Your group has {friends.length}.
                   </p>
                 )}
               </CardContent>
@@ -359,7 +380,7 @@ export default function Home() {
               </Card>
             </div>
             
-            <FairnessStats arrangements={arrangements} friends={friends} seats={seats} />
+            <FairnessStats arrangements={arrangements} friends={friends.map(f => f.displayName)} seats={seats} />
           </div>
         </div>
       </main>
@@ -370,7 +391,7 @@ export default function Home() {
           date={selectedDate}
           arrangement={selectedArrangement}
           onUpdateArrangement={handleUpdateArrangement}
-          friends={friends}
+          friends={friends.map(f => f.displayName)}
           seats={seats}
           currentUser={user.displayName || user.email!}
         />
@@ -378,3 +399,5 @@ export default function Home() {
     </div>
   );
 }
+
+    

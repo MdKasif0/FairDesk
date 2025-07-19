@@ -25,3 +25,23 @@ export interface Arrangement {
 }
 
 export type Arrangements = Record<string, Arrangement>;
+
+// Firestore-related types
+export interface UserProfile {
+  uid: string;
+  displayName: string;
+  email: string;
+  groupId: string | null;
+}
+
+export interface Group {
+  id: string;
+  name: string;
+  members: string[]; // array of user uids
+  inviteCode: string;
+  arrangements: Arrangements;
+  nonWorkingDays: string[];
+  specialEvents: Record<string, string>;
+}
+
+    

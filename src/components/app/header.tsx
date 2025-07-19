@@ -8,11 +8,12 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Badge } from '../ui/badge';
+import type { Group } from '@/types';
 
 
 interface HeaderProps {
     user: string | null;
-    group: { name: string; inviteCode: string; members: string[] } | null;
+    group: Group | null;
     onLogout: () => void;
 }
 
@@ -68,3 +69,5 @@ export function Header({ user, group, onLogout }: HeaderProps) {
     </header>
   );
 }
+
+    
